@@ -64,3 +64,21 @@ cma-bin-linux-amd64:
 # Delete an existing binary / cleanup
 remove-binary:
 	rm ${OPERATOR_BINARY_NAME}
+
+# Installs the required tools
+install-tools: install-dep
+	$(GOGET) k8s.io/code-generator/cmd/client-gen
+	$(GOINSTALL) k8s.io/code-generator/cmd/client-gen
+	$(GOINSTALL) k8s.io/code-generator/cmd/conversion-gen
+	$(GOINSTALL) k8s.io/code-generator/cmd/deepcopy-gen
+	$(GOINSTALL) k8s.io/code-generator/cmd/defaulter-gen
+	$(GOINSTALL) k8s.io/code-generator/cmd/go-to-protobuf
+	$(GOINSTALL) k8s.io/code-generator/cmd/import-boss
+	$(GOINSTALL) k8s.io/code-generator/cmd/informer-gen
+	$(GOINSTALL) k8s.io/code-generator/cmd/lister-gen
+	$(GOINSTALL) k8s.io/code-generator/cmd/openapi-gen
+	$(GOINSTALL) k8s.io/code-generator/cmd/set-gen
+
+# Run the code generators for the user
+generators:
+	./build/generators/update-codegen.sh
