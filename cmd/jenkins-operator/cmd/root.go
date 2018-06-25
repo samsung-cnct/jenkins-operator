@@ -17,13 +17,24 @@ limitations under the License.
 package cmd
 
 import (
-	"github.com/spf13/viper"
 	"flag"
 	"fmt"
-	"github.com/spf13/cobra"
 	"os"
 	"strings"
+	"time"
+
 	"github.com/golang/glog"
+	kubeinformers "k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
+
+	clientset "github.com/maratoid/jenkins-operator/pkg/jenkinsoperator/client/clientset/versioned"
+	informers "github.com/maratoid/jenkins-operator/pkg/jenkinsoperator/client/informers/externalversions"
+	jenkinsserver "github.com/maratoid/jenkins-operator/pkg/controllers/jenkins-server"
+	"github.com/maratoid/jenkins-operator/pkg/signals"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -59,10 +70,42 @@ func Execute() {
 
 func operator() {
 	// get flags
-	portNumber := viper.GetInt("port")
 	kubeconfigLocation := viper.GetString("kubeconfig")
 
-	glog.Info("Port: %i, kubeconfig: %s", portNumber, kubeconfigLocation)
+	glog.Info("kubeconfig: %s", kubeconfigLocation)
 
-	
+	// set up signals so we handle the first shutdown signal gracefully
+	stopCh := signals.SetupSignalHandler()
+
+	cfg, err := clientcmd.BuildConfigFromFlags("", kubeconfigLocation)
+	if err != nil {
+		glog.Fatalf("Error building kubeconfig: %s", err.Error())
+	}
+
+	kubeClient, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		glog.Fatalf("Error building kubernetes clientset: %s", err.Error())
+	}
+
+	exampleClient, err := clientset.NewForConfig(cfg)
+	if err != nil {
+		glog.Fatalf("Error building example clientset: %s", err.Error())
+	}
+
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*30)
+	exampleInformerFactory := informers.NewSharedInformerFactory(exampleClient, time.Second*30)
+
+	controller := jenkinsserver.NewController(
+		kubeClient,
+		exampleClient,
+		kubeInformerFactory,
+		exampleInformerFactory)
+
+	go kubeInformerFactory.Start(stopCh)
+	go exampleInformerFactory.Start(stopCh)
+
+	if err = controller.Run(2, stopCh); err != nil {
+		glog.Fatalf("Error running controller: %s", err.Error())
+	}
+
 }

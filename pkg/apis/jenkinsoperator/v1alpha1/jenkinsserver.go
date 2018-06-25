@@ -21,32 +21,31 @@ import (
 )
 
 // +genclient
+// +genclient:noStatus
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +k8s:openapi-gen=true
-type JenkinsServer struct {
-	metav1.TypeMeta   			`json:",inline"`
-	metav1.ObjectMeta 			`json:"metadata,omitempty"`
 
-	Spec   JenkinsServerSpec	`json:"spec"`
-	Status JenkinsServerStatus	`json:"status"`
+type JenkinsServer struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   JenkinsServerSpec   `json:"spec"`
+	Status JenkinsServerStatus `json:"status"`
 }
 
-// +k8s:openapi-gen=true
 type JenkinsServerSpec struct {
 	DeploymentName string `json:"deploymentName"`
 	Replicas       *int32 `json:"replicas"`
 }
 
-// +k8s:openapi-gen=true
 type JenkinsServerStatus struct {
 	AvailableReplicas int32 `json:"availableReplicas"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +k8s:openapi-gen=true
-type JenkinsServerList struct {
-	metav1.TypeMeta 		`json:",inline"`
-	metav1.ListMeta 		`json:"metadata"`
 
-	Items []JenkinsServer	`json:"items"`
+type JenkinsServerList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
+
+	Items []JenkinsServer `json:"items"`
 }

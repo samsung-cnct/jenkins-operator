@@ -15,6 +15,7 @@ limitations under the License.
 */
 
 package jenkins_server
+
 import (
 	"fmt"
 	"time"
@@ -37,10 +38,10 @@ import (
 	"k8s.io/client-go/util/workqueue"
 
 	operatorv1alpha1 "github.com/maratoid/jenkins-operator/pkg/apis/jenkinsoperator/v1alpha1"
-	clientset "github.com/maratoid/jenkins-operator/pkg/generated/jenkinsoperator/client/clientset/versioned"
-	samplescheme "github.com/maratoid/jenkins-operator/pkg/generated/jenkinsoperator/client/clientset/versioned/scheme"
-	informers "github.com/maratoid/jenkins-operator/pkg/generated/jenkinsoperator/client/informers/externalversions/jenkinsoperator/v1alpha1"
-	listers "github.com/maratoid/jenkins-operator/pkg/generated/jenkinsoperator/client/listers/jenkinsoperator/v1alpha1"
+	clientset "github.com/maratoid/jenkins-operator/pkg/jenkinsoperator/client/clientset/versioned"
+	operatorscheme "github.com/maratoid/jenkins-operator/jenkinsoperator/client/clientset/versioned/scheme"
+	informers "github.com/maratoid/jenkins-operator/pkg/jenkinsoperator/client/informers/externalversions/jenkinsoperator/v1alpha1"
+	listers "github.com/maratoid/jenkins-operator/pkg/jenkinsoperator/client/listers/jenkinsoperator/v1alpha1"
 )
 
 const controllerAgentName = "jenkins-server"
@@ -63,13 +64,13 @@ const (
 // Controller is the controller implementation for JenkinsServer resources
 type Controller struct {
 	// kubeclientset is a standard kubernetes clientset
-	kubeclientset 		kubernetes.Interface
-	// sampleclientset is a clientset for our own API group
-	sampleclientset 	clientset.Interface
+	kubeclientset kubernetes.Interface
+	// operatorclientset is a clientset for our own API group
+	operatorclientset clientset.Interface
 
-	deploymentsLister 	appslisters.DeploymentLister
-	deploymentsSynced 	cache.InformerSynced
-	jenkinsServerLister	listers.JenkinsServerLister
+	deploymentsLister   appslisters.DeploymentLister
+	deploymentsSynced   cache.InformerSynced
+	jenkinsServerLister listers.JenkinsServerLister
 	jenkinsServerSynced cache.InformerSynced
 
 	// workqueue is a rate limited work queue. This is used to queue work to be
@@ -83,17 +84,17 @@ type Controller struct {
 	recorder record.EventRecorder
 }
 
-// NewController returns a new sample controller
+// NewController returns a new jenkinsserver controller
 func NewController(
 	kubeclientset kubernetes.Interface,
-	sampleclientset clientset.Interface,
+	operatorclientset clientset.Interface,
 	deploymentInformer appsinformers.DeploymentInformer,
 	jenkinsServerInformer informers.JenkinsServerInformer) *Controller {
 
 	// Create event broadcaster
-	// Add sample-controller types to the default Kubernetes Scheme so Events can be
-	// logged for sample-controller types.
-	samplescheme.AddToScheme(scheme.Scheme)
+	// Add jenkinsserver-controller types to the default Kubernetes Scheme so Events can be
+	// logged for jenkinsserver-controller types.
+	operatorscheme.AddToScheme(scheme.Scheme)
 	glog.V(4).Info("Creating event broadcaster")
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(glog.Infof)
@@ -101,14 +102,14 @@ func NewController(
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	controller := &Controller{
-		kubeclientset:     		kubeclientset,
-		sampleclientset:   		sampleclientset,
-		deploymentsLister: 		deploymentInformer.Lister(),
-		deploymentsSynced: 		deploymentInformer.Informer().HasSynced,
-		jenkinsServerLister:    jenkinsServerInformer.Lister(),
-		jenkinsServerSynced:    jenkinsServerInformer.Informer().HasSynced,
-		workqueue:         		workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "JenkinsServers"),
-		recorder:          		recorder,
+		kubeclientset:       kubeclientset,
+		operatorclientset:   operatorclientset,
+		deploymentsLister:   deploymentInformer.Lister(),
+		deploymentsSynced:   deploymentInformer.Informer().HasSynced,
+		jenkinsServerLister: jenkinsServerInformer.Lister(),
+		jenkinsServerSynced: jenkinsServerInformer.Informer().HasSynced,
+		workqueue:           workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "JenkinsServers"),
+		recorder:            recorder,
 	}
 
 	glog.Info("Setting up event handlers")
@@ -325,7 +326,7 @@ func (c *Controller) updateJenkinsServerStatus(jenkinsServer *operatorv1alpha1.J
 	// we must use Update instead of UpdateStatus to update the Status block of the JenkinsServer resource.
 	// UpdateStatus will not allow changes to the Spec of the resource,
 	// which is ideal for ensuring nothing other than resource status has been updated.
-	_, err := c.sampleclientset.JenkinsoperatorV1alpha1().JenkinsServers(jenkinsServer.Namespace).Update(jenkinsServerCopy)
+	_, err := c.operatorclientset.JenkinsoperatorV1alpha1().JenkinsServers(jenkinsServer.Namespace).Update(jenkinsServerCopy)
 	return err
 }
 

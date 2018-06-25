@@ -33,9 +33,9 @@ OPERATOR_SOURCE_FILE=cmd/jenkins-operator/main.go
 BUILD_OPERATOR_BINARY_CMD=${GOBUILD} -a -tags netgo -ldflags ${LDFLAGS} -o ${OPERATOR_BINARY_NAME} ${OPERATOR_SOURCE_FILE}
 
 # By default we will most likely want to build a linux build of the application
-all: new-dep cma-bin-linux-amd64
+all: new-dep jenkins-operator-linux-amd64
 
-container-build: install-dep dep-ensure cma-bin-linux-amd64
+container-build: install-dep dep-ensure jenkins-operator-linux-amd64
 
 # Clean will clean up dep and remove any binaries
 clean: remove-binary
@@ -54,30 +54,16 @@ dep-ensure:
 	$(DEPCMD) ensure
 
 # Build a darwin (mac) binary
-cma-bin-darwin:
+jenkins-operator-darwin:
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 ${BUILD_OPERATOR_BINARY_CMD}
 
 # Build a linux amd64 binary
-cma-bin-linux-amd64:
+jenkins-operator-linux-amd64:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 ${BUILD_OPERATOR_BINARY_CMD}
 
 # Delete an existing binary / cleanup
 remove-binary:
 	rm ${OPERATOR_BINARY_NAME}
-
-# Installs the required tools
-install-tools: install-dep
-	$(GOGET) k8s.io/code-generator/cmd/client-gen
-	$(GOINSTALL) k8s.io/code-generator/cmd/client-gen
-	$(GOINSTALL) k8s.io/code-generator/cmd/conversion-gen
-	$(GOINSTALL) k8s.io/code-generator/cmd/deepcopy-gen
-	$(GOINSTALL) k8s.io/code-generator/cmd/defaulter-gen
-	$(GOINSTALL) k8s.io/code-generator/cmd/go-to-protobuf
-	$(GOINSTALL) k8s.io/code-generator/cmd/import-boss
-	$(GOINSTALL) k8s.io/code-generator/cmd/informer-gen
-	$(GOINSTALL) k8s.io/code-generator/cmd/lister-gen
-	$(GOINSTALL) k8s.io/code-generator/cmd/openapi-gen
-	$(GOINSTALL) k8s.io/code-generator/cmd/set-gen
 
 # Run the code generators for the user
 generators:

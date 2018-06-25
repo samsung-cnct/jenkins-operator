@@ -1,9 +1,9 @@
 package jsoniter
 
 import (
-	"github.com/modern-go/reflect2"
-	"reflect"
+	"github.com/v2pro/plz/reflect2"
 	"unsafe"
+	"reflect"
 )
 
 type dynamicEncoder struct {
