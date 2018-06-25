@@ -33,7 +33,7 @@ OPERATOR_SOURCE_FILE=cmd/jenkins-operator/main.go
 BUILD_OPERATOR_BINARY_CMD=${GOBUILD} -a -tags netgo -ldflags ${LDFLAGS} -o ${OPERATOR_BINARY_NAME} ${OPERATOR_SOURCE_FILE}
 
 # By default we will most likely want to build a linux build of the application
-all: new-dep jenkins-operator-linux-amd64
+all: jenkins-operator-linux-amd64
 
 container-build: install-dep dep-ensure jenkins-operator-linux-amd64
 
@@ -54,7 +54,7 @@ dep-ensure:
 	$(DEPCMD) ensure
 
 # Build a darwin (mac) binary
-jenkins-operator-darwin:
+jenkins-operator-darwin-amd64:
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 ${BUILD_OPERATOR_BINARY_CMD}
 
 # Build a linux amd64 binary

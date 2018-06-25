@@ -37,11 +37,11 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 
-	operatorv1alpha1 "github.com/maratoid/jenkins-operator/pkg/apis/jenkinsoperator/v1alpha1"
-	clientset "github.com/maratoid/jenkins-operator/pkg/jenkinsoperator/client/clientset/versioned"
-	operatorscheme "github.com/maratoid/jenkins-operator/jenkinsoperator/client/clientset/versioned/scheme"
-	informers "github.com/maratoid/jenkins-operator/pkg/jenkinsoperator/client/informers/externalversions/jenkinsoperator/v1alpha1"
-	listers "github.com/maratoid/jenkins-operator/pkg/jenkinsoperator/client/listers/jenkinsoperator/v1alpha1"
+	operatorv1alpha1 "github.com/maratoid/jenkins-operator/pkg/apis/jenkinsoperator.maratoid.github.com/v1alpha1"
+	clientset "github.com/maratoid/jenkins-operator/pkg/client/clientset/versioned"
+	operatorscheme "github.com/maratoid/jenkins-operator/pkg/client/clientset/versioned/scheme"
+	informers "github.com/maratoid/jenkins-operator/pkg/client/informers/externalversions/jenkinsoperator.maratoid.github.com/v1alpha1"
+	listers "github.com/maratoid/jenkins-operator/pkg/client/listers/jenkinsoperator.maratoid.github.com/v1alpha1"
 )
 
 const controllerAgentName = "jenkins-server"

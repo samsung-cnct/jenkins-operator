@@ -28,8 +28,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
-	clientset "github.com/maratoid/jenkins-operator/pkg/jenkinsoperator/client/clientset/versioned"
-	informers "github.com/maratoid/jenkins-operator/pkg/jenkinsoperator/client/informers/externalversions"
+	clientset "github.com/maratoid/jenkins-operator/pkg/client/clientset/versioned"
+	informers "github.com/maratoid/jenkins-operator/pkg/client/informers/externalversions"
 	jenkinsserver "github.com/maratoid/jenkins-operator/pkg/controllers/jenkins-server"
 	"github.com/maratoid/jenkins-operator/pkg/signals"
 
@@ -93,16 +93,16 @@ func operator() {
 	}
 
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*30)
-	exampleInformerFactory := informers.NewSharedInformerFactory(exampleClient, time.Second*30)
+	jenkinsOperatorInformerFactory := informers.NewSharedInformerFactory(exampleClient, time.Second*30)
 
 	controller := jenkinsserver.NewController(
 		kubeClient,
 		exampleClient,
-		kubeInformerFactory,
-		exampleInformerFactory)
+		kubeInformerFactory.Apps().V1().Deployments(),
+		jenkinsOperatorInformerFactory.Jenkinsoperator().V1alpha1().JenkinsServers())
 
 	go kubeInformerFactory.Start(stopCh)
-	go exampleInformerFactory.Start(stopCh)
+	go jenkinsOperatorInformerFactory.Start(stopCh)
 
 	if err = controller.Run(2, stopCh); err != nil {
 		glog.Fatalf("Error running controller: %s", err.Error())
