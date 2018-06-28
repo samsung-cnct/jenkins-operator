@@ -383,9 +383,8 @@ func (g openAPITypeWriter) generate(t *types.Type) error {
 		if hasOpenAPIDefinitionMethods(t) {
 			g.Do("return $.OpenAPIDefinition|raw${\n"+
 				"Schema: spec.Schema{\n"+
-				"SchemaProps: spec.SchemaProps{\n", args)
-			g.generateDescription(t.CommentLines)
-			g.Do("Type:$.type|raw${}.OpenAPISchemaType(),\n"+
+				"SchemaProps: spec.SchemaProps{\n"+
+				"Type:$.type|raw${}.OpenAPISchemaType(),\n"+
 				"Format:$.type|raw${}.OpenAPISchemaFormat(),\n"+
 				"},\n"+
 				"},\n"+
@@ -433,7 +432,7 @@ func (g openAPITypeWriter) generateStructExtensions(t *types.Type) error {
 	extensions, errors := parseExtensions(t.CommentLines)
 	// Initially, we will only log struct extension errors.
 	if len(errors) > 0 {
-		for _, e := range errors {
+		for e := range errors {
 			glog.V(2).Infof("[%s]: %s\n", t.String(), e)
 		}
 	}
@@ -443,16 +442,17 @@ func (g openAPITypeWriter) generateStructExtensions(t *types.Type) error {
 }
 
 func (g openAPITypeWriter) generateMemberExtensions(m *types.Member, parent *types.Type) error {
-	extensions, parseErrors := parseExtensions(m.CommentLines)
-	validationErrors := validateMemberExtensions(extensions, m)
-	errors := append(parseErrors, validationErrors...)
+	extensions, errors := parseExtensions(m.CommentLines)
 	// Initially, we will only log member extension errors.
 	if len(errors) > 0 {
 		errorPrefix := fmt.Sprintf("[%s] %s:", parent.String(), m.String())
-		for _, e := range errors {
+		for e := range errors {
 			glog.V(2).Infof("%s %s\n", errorPrefix, e)
 		}
 	}
+	// TODO(seans3): Validate member extensions here.
+	// Example: listType extension is only on a Slice.
+	// Example: cross-extension validation - listMapKey only makes sense with listType=map
 	g.emitExtensions(extensions)
 	return nil
 }

@@ -1,8 +1,10 @@
 GOCMD=go
+KUBEBUILDERCMD=kubebuilder
+DOCKERTAG?=jenkins-operator:local
 GOBUILD=$(GOCMD) build
 GOGET=$(GOCMD) get
 GOTEST=$(GOCMD) test
-GOINSTALL=$(GOCMD) install
+PROJECTDIR = $(shell pwd)
 DEPCMD=dep
 
 # Variables for binary version information
@@ -27,18 +29,23 @@ LDFLAGS = '${STATIC_FLAGS} ${LD_DATA}'
 
 # Location of
 OPERATOR_BINARY_NAME=jenkins-operator
-OPERATOR_SOURCE_FILE=cmd/jenkins-operator/main.go
+OPERATOR_SOURCE_FILE=cmd/controller-manager/main.go
 
 # build binary command
 BUILD_OPERATOR_BINARY_CMD=${GOBUILD} -a -tags netgo -ldflags ${LDFLAGS} -o ${OPERATOR_BINARY_NAME} ${OPERATOR_SOURCE_FILE}
 
 # By default we will most likely want to build a linux build of the application
-all: jenkins-operator-linux-amd64
-
-container-build: install-dep dep-ensure jenkins-operator-linux-amd64
+all: kube-builder jenkins-operator-linux-amd64
+linux: kube-builder jenkins-operator-linux-amd64
+darwin: kube-builder jenkins-operator-darwin-amd64
+container: kube-builder jenkins-operator-docker
 
 # Clean will clean up dep and remove any binaries
 clean: remove-binary
+
+# Generate kube builder code
+kube-builder:
+	$(KUBEBUILDERCMD) generate
 
 # Install dep will install dep in $GOROOT/bin
 install-dep:
@@ -61,10 +68,10 @@ jenkins-operator-darwin-amd64:
 jenkins-operator-linux-amd64:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 ${BUILD_OPERATOR_BINARY_CMD}
 
+# Build a docker image
+jenkins-operator-docker:
+	docker build $(PROJECTDIR) -f $(PROJECTDIR)/build/docker/Dockerfile -t $(DOCKERTAG)
+
 # Delete an existing binary / cleanup
 remove-binary:
 	rm ${OPERATOR_BINARY_NAME}
-
-# Run the code generators for the user
-generators:
-	./build/generators/update-codegen.sh
