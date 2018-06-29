@@ -26,6 +26,8 @@ import (
 type Interface interface {
 	// JenkinsInstances returns a JenkinsInstanceInformer.
 	JenkinsInstances() JenkinsInstanceInformer
+	// JenkinsPlugins returns a JenkinsPluginInformer.
+	JenkinsPlugins() JenkinsPluginInformer
 }
 
 type version struct {
@@ -42,4 +44,9 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 // JenkinsInstances returns a JenkinsInstanceInformer.
 func (v *version) JenkinsInstances() JenkinsInstanceInformer {
 	return &jenkinsInstanceInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// JenkinsPlugins returns a JenkinsPluginInformer.
+func (v *version) JenkinsPlugins() JenkinsPluginInformer {
+	return &jenkinsPluginInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

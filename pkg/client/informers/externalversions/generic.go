@@ -55,6 +55,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 	// Group=jenkins.jenkinsoperator.maratoid.github.com, Version=v1alpha1
 	case v1alpha1.SchemeGroupVersion.WithResource("jenkinsinstances"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Jenkins().V1alpha1().JenkinsInstances().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("jenkinsplugins"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Jenkins().V1alpha1().JenkinsPlugins().Informer()}, nil
 
 	}
 

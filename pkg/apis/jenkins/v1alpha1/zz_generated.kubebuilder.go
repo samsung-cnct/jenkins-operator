@@ -45,6 +45,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
 		&JenkinsInstance{},
 		&JenkinsInstanceList{},
+		&JenkinsPlugin{},
+		&JenkinsPluginList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil
@@ -56,6 +58,14 @@ type JenkinsInstanceList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []JenkinsInstance `json:"items"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type JenkinsPluginList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []JenkinsPlugin `json:"items"`
 }
 
 // CRD Generation
@@ -95,8 +105,106 @@ var (
 							Type: "object",
 						},
 						"spec": v1beta1.JSONSchemaProps{
-							Type:       "object",
-							Properties: map[string]v1beta1.JSONSchemaProps{},
+							Type: "object",
+							Properties: map[string]v1beta1.JSONSchemaProps{
+								"Image": v1beta1.JSONSchemaProps{
+									Pattern: ".+:.+",
+									Type:    "string",
+								},
+								"agentport": v1beta1.JSONSchemaProps{
+									Type:   "integer",
+									Format: "int32",
+								},
+								"config": v1beta1.JSONSchemaProps{
+									Type: "array",
+									Items: &v1beta1.JSONSchemaPropsOrArray{
+										Schema: &v1beta1.JSONSchemaProps{
+											Type: "string",
+										},
+									},
+								},
+								"executors": v1beta1.JSONSchemaProps{
+									Type:   "integer",
+									Format: "int32",
+								},
+								"masterport": v1beta1.JSONSchemaProps{
+									Type:   "integer",
+									Format: "int32",
+								},
+								"name": v1beta1.JSONSchemaProps{
+									Type: "string",
+								},
+							},
+						},
+						"status": v1beta1.JSONSchemaProps{
+							Type: "object",
+							Properties: map[string]v1beta1.JSONSchemaProps{
+								"api": v1beta1.JSONSchemaProps{
+									Type: "string",
+								},
+								"id": v1beta1.JSONSchemaProps{
+									Type: "string",
+								},
+								"phase": v1beta1.JSONSchemaProps{
+									Type: "string",
+								},
+							},
+							Required: []string{
+								"phase",
+								"id",
+							}},
+					},
+				},
+			},
+		},
+	}
+	// Define CRDs for resources
+	JenkinsPluginCRD = v1beta1.CustomResourceDefinition{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "jenkinsplugins.jenkins.jenkinsoperator.maratoid.github.com",
+		},
+		Spec: v1beta1.CustomResourceDefinitionSpec{
+			Group:   "jenkins.jenkinsoperator.maratoid.github.com",
+			Version: "v1alpha1",
+			Names: v1beta1.CustomResourceDefinitionNames{
+				Kind:   "JenkinsPlugin",
+				Plural: "jenkinsplugins",
+			},
+			Scope: "Namespaced",
+			Validation: &v1beta1.CustomResourceValidation{
+				OpenAPIV3Schema: &v1beta1.JSONSchemaProps{
+					Type: "object",
+					Properties: map[string]v1beta1.JSONSchemaProps{
+						"apiVersion": v1beta1.JSONSchemaProps{
+							Type: "string",
+						},
+						"kind": v1beta1.JSONSchemaProps{
+							Type: "string",
+						},
+						"metadata": v1beta1.JSONSchemaProps{
+							Type: "object",
+						},
+						"spec": v1beta1.JSONSchemaProps{
+							Type: "object",
+							Properties: map[string]v1beta1.JSONSchemaProps{
+								"config": v1beta1.JSONSchemaProps{
+									Type: "array",
+									Items: &v1beta1.JSONSchemaPropsOrArray{
+										Schema: &v1beta1.JSONSchemaProps{
+											Type: "string",
+										},
+									},
+								},
+								"jenkinsserverid": v1beta1.JSONSchemaProps{
+									Type: "string",
+								},
+								"pluginid": v1beta1.JSONSchemaProps{
+									Type: "string",
+								},
+								"version": v1beta1.JSONSchemaProps{
+									Type: "string",
+								},
+							},
 						},
 						"status": v1beta1.JSONSchemaProps{
 							Type:       "object",

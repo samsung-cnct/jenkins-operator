@@ -32,6 +32,10 @@ func (c *FakeJenkinsV1alpha1) JenkinsInstances(namespace string) v1alpha1.Jenkin
 	return &FakeJenkinsInstances{c, namespace}
 }
 
+func (c *FakeJenkinsV1alpha1) JenkinsPlugins(namespace string) v1alpha1.JenkinsPluginInterface {
+	return &FakeJenkinsPlugins{c, namespace}
+}
+
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
 func (c *FakeJenkinsV1alpha1) RESTClient() rest.Interface {

@@ -21,68 +21,44 @@ import (
 )
 
 // EDIT THIS FILE!
-// Created by "kubebuilder create resource" for you to implement the JenkinsInstance resource schema definition
+// Created by "kubebuilder create resource" for you to implement the JenkinsPlugin resource schema definition
 // as a go struct.
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-type JenkinsInstancePhase string
-const (
-	JenkinsInstancePhaseReady		= "Ready"
-	JenkinsInstancePhaseCreating	= "Creating"
-	JenkinsInstancePhaseRestarting	= "Restarting"
-)
-
-
-// JenkinsInstanceSpec defines the desired state of JenkinsInstance
-type JenkinsInstanceSpec struct {
+// JenkinsPluginSpec defines the desired state of JenkinsPlugin
+type JenkinsPluginSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "kubebuilder generate" to regenerate code after modifying this file
 
-	// What container image to use for a new jenkins instance
-	// +kubebuilder:validation:Pattern=.+:.+
-	Image string `json:"Image,omitempty"`
+	// ID of the JenkinsServer instance to install this plugin in
+	JenkinsServerId string `json:"jenkinsserverid,omitempty"`
 
-	// Service name for the jenkins instance
-	Name string `json:"name,omitempty"`
+	// plugin Id string
+	PluginId string `json:"pluginid,omitempty"`
 
-	// Jenkins master port
-	MasterPort int32 `json:"masterport,omitempty"`
-
-	// Jenkins agent port
-	AgentPort int32 `json:"agentport,omitempty"`
-
-	// How many executors
-	Executors int32 `json:"executors,omitempty"`
+	// plugin version
+	Version string `json:"version,omitempty"`
 
 	// Groovy configuration scripts
 	Config []string `json:"config,omitempty"`
 }
 
-// JenkinsInstanceStatus defines the observed state of JenkinsInstance
-type JenkinsInstanceStatus struct {
+// JenkinsPluginStatus defines the observed state of JenkinsPlugin
+type JenkinsPluginStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "kubebuilder generate" to regenerate code after modifying this file
-
-	// full url to newly created jenkins remote API endpoint
-	 Api string `json:"api,omitempty"`
-
-	 // state if jenkins server instance
-	 Phase JenkinsInstancePhase `json:"phase"`
-
-	 // Unique ID of jenkins server instance
-	 Id string `json:"id"`
 }
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// JenkinsInstance
+// JenkinsPlugin
 // +k8s:openapi-gen=true
-// +kubebuilder:resource:path=jenkinsinstances
-type JenkinsInstance struct {
+// +kubebuilder:resource:path=jenkinsplugins
+type JenkinsPlugin struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   JenkinsInstanceSpec   `json:"spec,omitempty"`
-	Status JenkinsInstanceStatus `json:"status,omitempty"`
+	Spec   JenkinsPluginSpec   `json:"spec,omitempty"`
+	Status JenkinsPluginStatus `json:"status,omitempty"`
 }

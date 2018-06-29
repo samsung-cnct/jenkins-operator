@@ -28,6 +28,7 @@ import (
 type JenkinsV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	JenkinsInstancesGetter
+	JenkinsPluginsGetter
 }
 
 // JenkinsV1alpha1Client is used to interact with features provided by the jenkins.jenkinsoperator.maratoid.github.com group.
@@ -37,6 +38,10 @@ type JenkinsV1alpha1Client struct {
 
 func (c *JenkinsV1alpha1Client) JenkinsInstances(namespace string) JenkinsInstanceInterface {
 	return newJenkinsInstances(c, namespace)
+}
+
+func (c *JenkinsV1alpha1Client) JenkinsPlugins(namespace string) JenkinsPluginInterface {
+	return newJenkinsPlugins(c, namespace)
 }
 
 // NewForConfig creates a new JenkinsV1alpha1Client for the given config.
