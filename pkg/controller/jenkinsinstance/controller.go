@@ -29,6 +29,9 @@ import (
 	jenkinsv1alpha1lister "github.com/maratoid/jenkins-operator/pkg/client/listers/jenkins/v1alpha1"
 
 	"github.com/maratoid/jenkins-operator/pkg/inject/args"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/golang/glog"
+	"github.com/rs/xid"
 )
 
 // EDIT THIS FILE
@@ -38,6 +41,20 @@ import (
 func (bc *JenkinsInstanceController) Reconcile(k types.ReconcileKey) error {
 	// INSERT YOUR CODE HERE
 	log.Printf("Implement the Reconcile function on jenkinsinstance.JenkinsInstanceController to reconcile %s\n", k.Name)
+
+	p, err := bc.jenkinsinstanceclient.
+		JenkinsInstances(k.Namespace).
+		Get(k.Name, v1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	glog.Infof(
+		"Got JenkinsInstance with Name: %s, Image: %s, Config: %s, Executors: %i, Agent port: %i, Master port: %i",
+		p.Spec.Name, p.Spec.Image, p.Spec.Config, p.Spec.Executors, p.Spec.AgentPort, p.Spec.MasterPort)
+
+	p.Status.Api = "http://fake.jenkins.com:8080/api"
+	p.Status.Phase = jenkinsv1alpha1.JenkinsInstancePhaseReady
+	p.Status.Id = xid.New().String()
 	return nil
 }
 

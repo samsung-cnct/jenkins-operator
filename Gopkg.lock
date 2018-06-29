@@ -173,7 +173,8 @@
     "pkg/inject/args",
     "pkg/inject/run",
     "pkg/install",
-    "pkg/signals"
+    "pkg/signals",
+    "pkg/test"
   ]
   revision = "a523fb6b174c2785084eb0948c4cfdaf2f818bc4"
   version = "v0.1.12"
@@ -261,6 +262,12 @@
   name = "github.com/pelletier/go-toml"
   packages = ["."]
   revision = "c01d1270ff3e442a8a57cddc1c92dc1138598194"
+  version = "v1.2.0"
+
+[[projects]]
+  name = "github.com/rs/xid"
+  packages = ["."]
+  revision = "2c7e97ce663ff82c49656bca3048df0fdd83c5f9"
   version = "v1.2.0"
 
 [[projects]]
@@ -508,6 +515,7 @@
   name = "k8s.io/client-go"
   packages = [
     "discovery",
+    "discovery/fake",
     "informers",
     "informers/admissionregistration",
     "informers/admissionregistration/v1alpha1",
@@ -609,6 +617,7 @@
     "plugin/pkg/client/auth/gcp",
     "rest",
     "rest/watch",
+    "testing",
     "third_party/forked/golang/template",
     "tools/auth",
     "tools/cache",
@@ -661,6 +670,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "2e7b4304f3052ff28d6f41d2488992e712aa3b5686f07a726649697d560fe5f3"
+  inputs-digest = "5d2e3b4776a329afda094d1ab32dd1f56ded179addd1f50a9fe8ecf629e89dd5"
   solver-name = "gps-cdcl"
   solver-version = 1
