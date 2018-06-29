@@ -25,13 +25,6 @@ import (
 // as a go struct.
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-type JenkinsInstancePhase string
-const (
-	JenkinsInstancePhaseReady		= "Ready"
-	JenkinsInstancePhaseCreating	= "Creating"
-	JenkinsInstancePhaseRestarting	= "Restarting"
-)
-
 
 // JenkinsInstanceSpec defines the desired state of JenkinsInstance
 type JenkinsInstanceSpec struct {
@@ -56,6 +49,9 @@ type JenkinsInstanceSpec struct {
 
 	// Groovy configuration scripts
 	Config []string `json:"config,omitempty"`
+
+	// Number of replicas
+	Replicas *int32 `json:"replicas,omitempty"`
 }
 
 // JenkinsInstanceStatus defines the observed state of JenkinsInstance
@@ -67,10 +63,7 @@ type JenkinsInstanceStatus struct {
 	 Api string `json:"api,omitempty"`
 
 	 // state if jenkins server instance
-	 Phase JenkinsInstancePhase `json:"phase"`
-
-	 // Unique ID of jenkins server instance
-	 Id string `json:"id"`
+	 Phase string `json:"phase"`
 }
 
 // +genclient

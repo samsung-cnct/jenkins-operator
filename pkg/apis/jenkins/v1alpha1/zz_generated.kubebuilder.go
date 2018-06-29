@@ -134,6 +134,10 @@ var (
 								"name": v1beta1.JSONSchemaProps{
 									Type: "string",
 								},
+								"replicas": v1beta1.JSONSchemaProps{
+									Type:   "integer",
+									Format: "int32",
+								},
 							},
 						},
 						"status": v1beta1.JSONSchemaProps{
@@ -142,16 +146,12 @@ var (
 								"api": v1beta1.JSONSchemaProps{
 									Type: "string",
 								},
-								"id": v1beta1.JSONSchemaProps{
-									Type: "string",
-								},
 								"phase": v1beta1.JSONSchemaProps{
 									Type: "string",
 								},
 							},
 							Required: []string{
 								"phase",
-								"id",
 							}},
 					},
 				},

@@ -93,6 +93,15 @@ func (in *JenkinsInstanceSpec) DeepCopyInto(out *JenkinsInstanceSpec) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.Replicas != nil {
+		in, out := &in.Replicas, &out.Replicas
+		if *in == nil {
+			*out = nil
+		} else {
+			*out = new(int32)
+			**out = **in
+		}
+	}
 	return
 }
 
