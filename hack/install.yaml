@@ -1,0 +1,232 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  creationTimestamp: null
+  labels:
+    api: jenkins-operator
+    kubebuilder.k8s.io: 0.1.12
+  name: jenkins-operator-system
+spec: {}
+status: {}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  labels:
+    api: jenkins-operator
+    kubebuilder.k8s.io: 0.1.12
+  name: jenkins-operator-role
+rules:
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - jenkins.jenkinsoperator.maratoid.github.com
+  resources:
+  - '*'
+  verbs:
+  - '*'
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  creationTimestamp: null
+  labels:
+    api: jenkins-operator
+    kubebuilder.k8s.io: 0.1.12
+  name: jenkins-operator-rolebinding
+  namespace: jenkins-operator-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: jenkins-operator-role
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: jenkins-operator-system
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  creationTimestamp: null
+  labels:
+    api: jenkins-operator
+    kubebuilder.k8s.io: 0.1.12
+  name: jenkinsinstances.jenkins.jenkinsoperator.maratoid.github.com
+spec:
+  group: jenkins.jenkinsoperator.maratoid.github.com
+  names:
+    kind: JenkinsInstance
+    plural: jenkinsinstances
+  scope: Namespaced
+  validation:
+    openAPIV3Schema:
+      properties:
+        apiVersion:
+          type: string
+        kind:
+          type: string
+        metadata:
+          type: object
+        spec:
+          properties:
+            agentport:
+              format: int32
+              type: integer
+            config:
+              items:
+                type: string
+              type: array
+            env:
+              type: object
+            executors:
+              format: int32
+              type: integer
+            image:
+              pattern: .+:.+
+              type: string
+            masterport:
+              format: int32
+              type: integer
+            name:
+              type: string
+            pullpolicy:
+              type: string
+            replicas:
+              format: int32
+              type: integer
+            servicetype:
+              type: string
+          type: object
+        status:
+          properties:
+            api:
+              type: string
+            phase:
+              type: string
+          required:
+          - phase
+          type: object
+      type: object
+  version: v1alpha1
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: null
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  creationTimestamp: null
+  labels:
+    api: jenkins-operator
+    kubebuilder.k8s.io: 0.1.12
+  name: jenkinsplugins.jenkins.jenkinsoperator.maratoid.github.com
+spec:
+  group: jenkins.jenkinsoperator.maratoid.github.com
+  names:
+    kind: JenkinsPlugin
+    plural: jenkinsplugins
+  scope: Namespaced
+  validation:
+    openAPIV3Schema:
+      properties:
+        apiVersion:
+          type: string
+        kind:
+          type: string
+        metadata:
+          type: object
+        spec:
+          properties:
+            config:
+              items:
+                type: string
+              type: array
+            jenkinsserverid:
+              type: string
+            pluginid:
+              type: string
+            version:
+              type: string
+          type: object
+        status:
+          type: object
+      type: object
+  version: v1alpha1
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: null
+---
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  labels:
+    api: jenkins-operator
+    control-plane: controller-manager
+    kubebuilder.k8s.io: 0.1.12
+  name: jenkins-operator-controller-manager-service
+  namespace: jenkins-operator-system
+spec:
+  clusterIP: None
+  selector:
+    api: jenkins-operator
+    control-plane: controller-manager
+    kubebuilder.k8s.io: 0.1.12
+status:
+  loadBalancer: {}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  creationTimestamp: null
+  labels:
+    api: jenkins-operator
+    control-plane: controller-manager
+    kubebuilder.k8s.io: 0.1.12
+  name: jenkins-operator-controller-manager
+  namespace: jenkins-operator-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      api: jenkins-operator
+      control-plane: controller-manager
+      kubebuilder.k8s.io: 0.1.12
+  serviceName: jenkins-operator-controller-manager-service
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        api: jenkins-operator
+        control-plane: controller-manager
+        kubebuilder.k8s.io: 0.1.12
+    spec:
+      containers:
+      - args:
+        - --install-crds=false
+        command:
+        - /root/controller-manager
+        image: jenkins-operator:local
+        name: controller-manager
+        resources:
+          limits:
+            cpu: 100m
+            memory: 30Mi
+          requests:
+            cpu: 100m
+            memory: 20Mi
+      terminationGracePeriodSeconds: 10
+  updateStrategy: {}
+status:
+  replicas: 0

@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
 )
 
 // EDIT THIS FILE!
@@ -33,10 +34,13 @@ type JenkinsInstanceSpec struct {
 
 	// What container image to use for a new jenkins instance
 	// +kubebuilder:validation:Pattern=.+:.+
-	Image string `json:"Image,omitempty"`
+	Image string `json:"image,omitempty"`
 
 	// Service name for the jenkins instance
 	Name string `json:"name,omitempty"`
+
+	// Dictionary of environment variable values
+	Env map[string]string `json:"env,omitempty"`
 
 	// Jenkins master port
 	MasterPort int32 `json:"masterport,omitempty"`
@@ -52,6 +56,12 @@ type JenkinsInstanceSpec struct {
 
 	// Number of replicas
 	Replicas *int32 `json:"replicas,omitempty"`
+
+	// Image pull policy
+	PullPolicy corev1.PullPolicy `json:"pullpolicy,omitempty"`
+
+	// Jenkins instance service type
+	ServiceType corev1.ServiceType `json:"servicetype,omitempty"`
 }
 
 // JenkinsInstanceStatus defines the observed state of JenkinsInstance

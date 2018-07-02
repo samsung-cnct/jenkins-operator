@@ -3,4 +3,17 @@ kind: JenkinsInstance
 metadata:
   name: jenkinsinstance-example
 spec:
-  foo: bar
+  image: jenkins/jenkins:lts
+  name: operatedjenkins
+  env:
+    JAVA_OPTS: "-Xms1024m -Xmx1024m -Djenkins.install.runSetupWizard=false -Djenkins.CLI.disabled=true -Dpermissive-script-security.enabled=true"
+    JENKINS_OPTS: "--argumentsRealm.passwd.$(ADMIN_USER)=$(ADMIN_PASSWORD) --argumentsRealm.roles.$(ADMIN_USER)=$(ADMIN_USER)"
+    ADMIN_PASSWORD: "password"
+    ADMIN_USER: "admin"
+  masterport: 8080
+  agentport: 50000
+  executors: 2
+  config: ""
+  replicas: 1
+  pullpolicy: Always
+  servicetype: ClusterIP

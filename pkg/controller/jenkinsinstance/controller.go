@@ -34,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/maratoid/jenkins-operator/pkg/inject/args"
 	"github.com/golang/glog"
@@ -74,17 +75,17 @@ func (bc *JenkinsInstanceController) Reconcile(key types.ReconcileKey) error {
 		return err
 	}
 
-	deploymentName := jenkinsInstance.Spec.Name
-	if deploymentName == "" {
+	baseName := jenkinsInstance.Spec.Name
+	if baseName == "" {
 		// We choose to absorb the error here as the worker would requeue the
 		// resource otherwise. Instead, the next time the resource is updated
 		// the resource will be queued again.
-		runtime.HandleError(fmt.Errorf("%s: deployment name must be specified", k))
+		runtime.HandleError(fmt.Errorf("%s: deployment name must be specified", key.String()))
 		return nil
 	}
 
 	// Get the deployment with the name specified in JenkinsInstance.spec
-	deployment, err := bc.KubernetesInformers.Apps().V1().Deployments().Lister().Deployments(jenkinsInstance.Namespace).Get(deploymentName)
+	deployment, err := bc.KubernetesInformers.Apps().V1().Deployments().Lister().Deployments(jenkinsInstance.Namespace).Get(baseName)
 	// If the resource doesn't exist, we'll create it
 	if errors.IsNotFound(err) {
 		deployment, err = bc.KubernetesClientSet.AppsV1().Deployments(jenkinsInstance.Namespace).Create(newDeployment(jenkinsInstance))
@@ -105,12 +106,36 @@ func (bc *JenkinsInstanceController) Reconcile(key types.ReconcileKey) error {
 		return fmt.Errorf(msg)
 	}
 
-	// TODO: Update the Deployment iff its observed Spec does
-	// TODO: not matched the desired Spec
-	// if jenkinsInstance.Spec.Replicas != nil && *foo.Spec.Replicas != *deployment.Spec.Replicas {
-	//	glog.V(4).Infof("Foo %s replicas: %d, deployment replicas: %d", name, *foo.Spec.Replicas, *deployment.Spec.Replicas)
-    // deployment, err = bc.KubernetesClientSet.AppsV1().Deployments(foo.Namespace).Update(newDeployment(foo))
-	//}
+	// Get the service with the name specified in JenkinsInstance.spec
+	service, err := bc.KubernetesInformers.Core().V1().Services().Lister().Services(jenkinsInstance.Namespace).Get(baseName)
+	// If the resource doesn't exist, we'll create it
+	if errors.IsNotFound(err) {
+		service, err = bc.KubernetesClientSet.CoreV1().Services(jenkinsInstance.Namespace).Create(newService(jenkinsInstance))
+	}
+
+	// If an error occurs during Get/Create, we'll requeue the item so we can
+	// attempt processing again later. This could have been caused by a
+	// temporary network failure, or any other transient reason.
+	if err != nil {
+		return err
+	}
+
+	// If the Deployment is not controlled by this JenkinsInstance resource, we should log
+	// a warning to the event recorder and ret
+	if !metav1.IsControlledBy(service, jenkinsInstance) {
+		msg := fmt.Sprintf(MessageResourceExists, service.Name)
+		bc.jenkinsinstancerecorder.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
+		return fmt.Errorf(msg)
+	}
+
+	// Update the Deployment iff its observed Spec does
+	// TODO: consider other changes besides replicas number
+	if jenkinsInstance.Spec.Replicas != nil && *jenkinsInstance.Spec.Replicas != *deployment.Spec.Replicas {
+		glog.V(4).Infof("jenkinsInstance %s replicas: %d, deployment replicas: %d", baseName, *jenkinsInstance.Spec.Replicas, *deployment.Spec.Replicas)
+    	deployment, err = bc.KubernetesClientSet.AppsV1().Deployments(jenkinsInstance.Namespace).Update(newDeployment(jenkinsInstance))
+	}
+
+	// TODO: Update the Service iff its observed Spec does
 
 	// If an error occurs during Update, we'll requeue the item so we can
 	// attempt processing again later. This could have been caused by a
@@ -121,7 +146,7 @@ func (bc *JenkinsInstanceController) Reconcile(key types.ReconcileKey) error {
 
 	// Finally, we update the status block of the JenkinsInstance resource to reflect the
 	// current state of the world
-	err = bc.updateJenkinsInstanceStatus(jenkinsInstance, deployment)
+	err = bc.updateJenkinsInstanceStatus(jenkinsInstance, deployment, service)
 	if err != nil {
 		return err
 	}
@@ -197,14 +222,15 @@ func (c JenkinsInstanceController) LookupJenkinsInstance(r types.ReconcileKey) (
 }
 
 
-func (bc *JenkinsInstanceController) updateJenkinsInstanceStatus(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, deployment *appsv1.Deployment) error {
+func (bc *JenkinsInstanceController) updateJenkinsInstanceStatus(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, deployment *appsv1.Deployment, service *corev1.Service) error {
 	// NEVER modify objects from the store. It's a read-only, local cache.
 	// You can use DeepCopy() to make a deep copy of original object and modify this copy
 	// Or create a copy manually for better performance
 	jenkinsInstanceCopy := jenkinsInstance.DeepCopy()
 
-	// TODO: update status fields
-	//jenkinsInstanceCopy.Status.AvailableReplicas = deployment.Status.AvailableReplicas
+	// TODO: update other status fields
+	jenkinsInstanceCopy.Status.Phase = "Ready"
+	jenkinsInstanceCopy.Status.Api = "http://" + service.Name + "." + service.Namespace + ".svc." + "cluster.local:" + string(jenkinsInstance.Spec.MasterPort)
 	// Until #38113 is merged, we must use Update instead of UpdateStatus to
 	// update the Status block of the JenkinsInstanceC resource. UpdateStatus will not
 	// allow changes to the Spec of the resource, which is ideal for ensuring
@@ -213,16 +239,74 @@ func (bc *JenkinsInstanceController) updateJenkinsInstanceStatus(jenkinsInstance
 	return err
 }
 
-
-// newDeployment creates a new Deployment for a JenkinsInstance resource. It also sets
+// newService creates a new Service for a JenkinsInstance resource. It also sets
 // the appropriate OwnerReferences on the resource so handleObject can discover
 // the JenkinsInstance resource that 'owns' it.
-// TODO: correct image and other parameters
-func newDeployment(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *appsv1.Deployment {
+func newService(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *corev1.Service {
 	labels := map[string]string{
 		"app":        "JenkinsCI",
 		"controller": jenkinsInstance.Name,
 	}
+
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: jenkinsInstance.Spec.Name,
+			Namespace: jenkinsInstance.Namespace,
+			Labels: labels,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(jenkinsInstance, schema.GroupVersionKind{
+					Group:   jenkinsv1alpha1.SchemeGroupVersion.Group,
+					Version: jenkinsv1alpha1.SchemeGroupVersion.Version,
+					Kind:    "JenkinsInstance",
+				}),
+			},
+		},
+
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{
+					Name: "master",
+					Protocol: "TCP",
+					TargetPort: intstr.IntOrString{
+						Type:   intstr.Int,
+						IntVal: jenkinsInstance.Spec.MasterPort,
+					},
+				},
+				{
+					Name: "agent",
+					Protocol: "TCP",
+					TargetPort: intstr.IntOrString{
+						Type:   intstr.Int,
+						IntVal: jenkinsInstance.Spec.AgentPort,
+					},
+				},
+			},
+			Selector: map[string]string{
+				"component": string(jenkinsInstance.UID),
+			},
+			Type: jenkinsInstance.Spec.ServiceType,
+		},
+	}
+}
+
+// newDeployment creates a new Deployment for a JenkinsInstance resource. It also sets
+// the appropriate OwnerReferences on the resource so handleObject can discover
+// the JenkinsInstance resource that 'owns' it.
+func newDeployment(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *appsv1.Deployment {
+	labels := map[string]string{
+		"app":        "JenkinsCI",
+		"controller": jenkinsInstance.Name,
+		"component": string(jenkinsInstance.UID),
+	}
+
+	var env []corev1.EnvVar
+	for envVar, envVarVal := range jenkinsInstance.Spec.Env {
+		env = append(env, corev1.EnvVar{
+			Name:      envVar,
+			Value:     envVarVal,
+		})
+	}
+
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jenkinsInstance.Spec.Name,
@@ -231,7 +315,7 @@ func newDeployment(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *appsv1.Dep
 				*metav1.NewControllerRef(jenkinsInstance, schema.GroupVersionKind{
 					Group:   jenkinsv1alpha1.SchemeGroupVersion.Group,
 					Version: jenkinsv1alpha1.SchemeGroupVersion.Version,
-					Kind:    "Foo",
+					Kind:    "JenkinsInstance",
 				}),
 			},
 		},
@@ -249,8 +333,25 @@ func newDeployment(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *appsv1.Dep
 						{
 							Name:  "JenkinsCI",
 							Image: jenkinsInstance.Spec.Image,
+							Ports: []corev1.ContainerPort{
+								{
+									Name:"master",
+									ContainerPort: jenkinsInstance.Spec.MasterPort,
+									HostPort: jenkinsInstance.Spec.MasterPort,
+									Protocol: "TCP",
+								},
+								{
+									Name:"agent",
+									ContainerPort: jenkinsInstance.Spec.AgentPort,
+									HostPort: jenkinsInstance.Spec.AgentPort,
+									Protocol: "TCP",
+								},
+							},
+							Env: env,
+							ImagePullPolicy: jenkinsInstance.Spec.PullPolicy,
 						},
 					},
+
 				},
 			},
 		},

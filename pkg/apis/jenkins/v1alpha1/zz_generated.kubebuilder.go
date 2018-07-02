@@ -107,10 +107,6 @@ var (
 						"spec": v1beta1.JSONSchemaProps{
 							Type: "object",
 							Properties: map[string]v1beta1.JSONSchemaProps{
-								"Image": v1beta1.JSONSchemaProps{
-									Pattern: ".+:.+",
-									Type:    "string",
-								},
 								"agentport": v1beta1.JSONSchemaProps{
 									Type:   "integer",
 									Format: "int32",
@@ -123,9 +119,16 @@ var (
 										},
 									},
 								},
+								"env": v1beta1.JSONSchemaProps{
+									Type: "object",
+								},
 								"executors": v1beta1.JSONSchemaProps{
 									Type:   "integer",
 									Format: "int32",
+								},
+								"image": v1beta1.JSONSchemaProps{
+									Pattern: ".+:.+",
+									Type:    "string",
 								},
 								"masterport": v1beta1.JSONSchemaProps{
 									Type:   "integer",
@@ -134,9 +137,15 @@ var (
 								"name": v1beta1.JSONSchemaProps{
 									Type: "string",
 								},
+								"pullpolicy": v1beta1.JSONSchemaProps{
+									Type: "string",
+								},
 								"replicas": v1beta1.JSONSchemaProps{
 									Type:   "integer",
 									Format: "int32",
+								},
+								"servicetype": v1beta1.JSONSchemaProps{
+									Type: "string",
 								},
 							},
 						},

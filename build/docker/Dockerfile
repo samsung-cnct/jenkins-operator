@@ -28,7 +28,8 @@ RUN go test ./pkg/... ./cmd/...
 
 
 FROM alpine
-COPY --from=builder /go/src/github.com/maratoid/jenkins-operator/jenkins-operator /jenkins-operator
+RUN mkdir -p /root
+COPY --from=builder /go/src/github.com/maratoid/jenkins-operator/jenkins-operator /root/controller-manager
 
-ENTRYPOINT ["/jenkins-operator"]
-CMD ["--install-crds=false"]
+ENTRYPOINT ["/root/controller-manager"]
+CMD ["--install-crds=true"]
