@@ -13,7 +13,8 @@ spec:
   masterport: 8080
   agentport: 50000
   executors: 2
-  config: ""
+  config:
+    - ""
   replicas: 1
   pullpolicy: Always
-  servicetype: ClusterIP
+  servicetype: NodePort

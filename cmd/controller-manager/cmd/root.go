@@ -17,7 +17,6 @@ limitations under the License.
 package cmd
 
 import (
-	"flag"
 	// Import auth/gcp to connect to GKE clusters remotely
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 
@@ -33,10 +32,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+
 	"strings"
 	"fmt"
 	"os"
 	"github.com/golang/glog"
+	"flag"
 )
 
 var (
@@ -45,7 +46,7 @@ var (
 		Short: "Jenkins Operator",
 		Long:  `Jenkins CI Operator`,
 		Run: func(cmd *cobra.Command, args []string) {
-			operator()
+			operator(cmd)
 		},
 	}
 )
@@ -59,14 +60,10 @@ func init() {
 	viper.SetEnvPrefix("JENKINSOPERATOR")
 	replacer := strings.NewReplacer("-", "_")
 	viper.SetEnvKeyReplacer(replacer)
-
-	rootCmd.Flags().String("kubeconfig", "", "Location of kubeconfig file")
-	rootCmd.Flags().Bool("install-crds", true, "install the CRDs used by the controller as part of startup")
-
-	viper.BindPFlag("kubeconfig", rootCmd.Flags().Lookup("kubeconfig"))
-
 	viper.AutomaticEnv()
+	rootCmd.Flags().Bool("install-crds", true, "install the CRDs used by the controller as part of startup")
 	rootCmd.Flags().AddGoFlagSet(flag.CommandLine)
+	//rootCmd.Flags().Parse()
 }
 
 func Execute() {
@@ -76,9 +73,9 @@ func Execute() {
 	}
 }
 
-func operator() {
+func operator(cmd *cobra.Command) {
 	// get flags
-	installCRDs := viper.GetBool("install-crds")
+	installCRDs, _ := cmd.Flags().GetBool("install-crds")
 
 	stopCh := signals.SetupSignalHandler()
 	config := configlib.GetConfigOrDie()

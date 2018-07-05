@@ -95,6 +95,7 @@ func (bc *JenkinsInstanceController) Reconcile(key types.ReconcileKey) error {
 	// attempt processing again later. This could have been caused by a
 	// temporary network failure, or any other transient reason.
 	if err != nil {
+		glog.Errorf("Error creating deployment: %s", err)
 		return err
 	}
 
@@ -117,6 +118,7 @@ func (bc *JenkinsInstanceController) Reconcile(key types.ReconcileKey) error {
 	// attempt processing again later. This could have been caused by a
 	// temporary network failure, or any other transient reason.
 	if err != nil {
+		glog.Errorf("Error creating service: %s", err)
 		return err
 	}
 
@@ -155,9 +157,11 @@ func (bc *JenkinsInstanceController) Reconcile(key types.ReconcileKey) error {
 	return nil
 }
 
-// +controller:group=jenkins,version=v1alpha1,kind=JenkinsInstance,resource=jenkinsinstances
-// +informers:group=apps,version=v1,kind=Deployment
-// +rbac:groups=apps,resources=deployments,verbs=get;list;watch
+// +kubebuilder:controller:group=jenkins,version=v1alpha1,kind=JenkinsInstance,resource=jenkinsinstances
+// +kubebuilder:informers:group=apps,version=v1,kind=Deployment
+// +kubebuilder:informers:group=core,version=v1,kind=Service
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch
+// +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch
 type JenkinsInstanceController struct {
 	// INSERT ADDITIONAL FIELDS HERE
 	args.InjectArgs
@@ -174,6 +178,7 @@ type JenkinsInstanceController struct {
 func ProvideController(arguments args.InjectArgs) (*controller.GenericController, error) {
 	// INSERT INITIALIZATIONS FOR ADDITIONAL FIELDS HERE
 	bc := &JenkinsInstanceController{
+		InjectArgs: arguments,
 		jenkinsinstanceLister: arguments.ControllerManager.GetInformerProvider(&jenkinsv1alpha1.JenkinsInstance{}).(jenkinsv1alpha1informer.JenkinsInstanceInformer).Lister(),
 
 		jenkinsinstanceclient:   arguments.Clientset.JenkinsV1alpha1(),
@@ -197,6 +202,17 @@ func ProvideController(arguments args.InjectArgs) (*controller.GenericController
 	// handling Deployment resources. More info on this pattern:
 	// https://github.com/kubernetes/community/blob/8cafef897a22026d42f5e5bb3f104febe7e29830/contributors/devel/controllers.md
 	if err := gc.WatchControllerOf(&appsv1.Deployment{}, eventhandlers.Path{bc.LookupJenkinsInstance},
+		predicates.ResourceVersionChanged); err != nil {
+		return gc, err
+	}
+
+	// Set up an event handler for when Service resources change. This
+	// handler will lookup the owner of the given Service, and if it is
+	// owned by a JenkinsInstance resource will enqueue that JenkinsInstance resource for
+	// processing. This way, we don't need to implement custom logic for
+	// handling Service resources. More info on this pattern:
+	// https://github.com/kubernetes/community/blob/8cafef897a22026d42f5e5bb3f104febe7e29830/contributors/devel/controllers.md
+	if err := gc.WatchControllerOf(&corev1.Service{}, eventhandlers.Path{bc.LookupJenkinsInstance},
 		predicates.ResourceVersionChanged); err != nil {
 		return gc, err
 	}
@@ -244,7 +260,7 @@ func (bc *JenkinsInstanceController) updateJenkinsInstanceStatus(jenkinsInstance
 // the JenkinsInstance resource that 'owns' it.
 func newService(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *corev1.Service {
 	labels := map[string]string{
-		"app":        "JenkinsCI",
+		"app":        "jenkinsci",
 		"controller": jenkinsInstance.Name,
 	}
 
@@ -267,6 +283,7 @@ func newService(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *corev1.Servic
 				{
 					Name: "master",
 					Protocol: "TCP",
+					Port: jenkinsInstance.Spec.MasterPort,
 					TargetPort: intstr.IntOrString{
 						Type:   intstr.Int,
 						IntVal: jenkinsInstance.Spec.MasterPort,
@@ -275,6 +292,7 @@ func newService(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *corev1.Servic
 				{
 					Name: "agent",
 					Protocol: "TCP",
+					Port: jenkinsInstance.Spec.AgentPort,
 					TargetPort: intstr.IntOrString{
 						Type:   intstr.Int,
 						IntVal: jenkinsInstance.Spec.AgentPort,
@@ -294,7 +312,7 @@ func newService(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *corev1.Servic
 // the JenkinsInstance resource that 'owns' it.
 func newDeployment(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *appsv1.Deployment {
 	labels := map[string]string{
-		"app":        "JenkinsCI",
+		"app":        "jenkinsci",
 		"controller": jenkinsInstance.Name,
 		"component": string(jenkinsInstance.UID),
 	}
@@ -331,7 +349,7 @@ func newDeployment(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *appsv1.Dep
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:  "JenkinsCI",
+							Name:  "jenkinsci",
 							Image: jenkinsInstance.Spec.Image,
 							Ports: []corev1.ContainerPort{
 								{

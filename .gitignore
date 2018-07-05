@@ -12,3 +12,4 @@
 *.out
 /jenkins-operator
 .idea/
+Go_build_*
