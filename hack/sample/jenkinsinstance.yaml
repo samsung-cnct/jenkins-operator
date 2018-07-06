@@ -16,3 +16,5 @@ spec:
   pullpolicy: Always
   servicetype: NodePort
   adminuser: admin
+  location: jenkins.example.com
+  adminemail: admin@example.com

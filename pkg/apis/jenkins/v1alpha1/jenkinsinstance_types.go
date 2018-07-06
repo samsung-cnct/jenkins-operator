@@ -65,6 +65,12 @@ type JenkinsInstanceSpec struct {
 
 	// Admin user name
 	AdminUser string `json:"adminuser,omitempty"`
+
+	// Jenkins location
+	Location string `json:"location,omitempty"`
+
+	// Jenkins admin email
+	AdminEmail string `json:"adminemail,omitempty"`
 }
 
 // JenkinsInstanceStatus defines the observed state of JenkinsInstance

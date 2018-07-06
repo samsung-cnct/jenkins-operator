@@ -41,6 +41,8 @@ import (
 	"github.com/maratoid/jenkins-operator/pkg/bindata"
 	"github.com/sethvargo/go-password/password"
 	"fmt"
+	"text/template"
+	"bytes"
 )
 
 // EDIT THIS FILE
@@ -63,9 +65,6 @@ const (
 )
 
 func (bc *JenkinsInstanceController) Reconcile(key types.ReconcileKey) error {
-	// INSERT YOUR CODE HERE
-	glog.Infof("Implement the Reconcile function on jenkinsinstance.JenkinsInstanceController to reconcile %s\n", key.Name)
-
 	jenkinsInstance, err := bc.jenkinsinstanceclient.
 		JenkinsInstances(key.Namespace).
 		Get(key.Name, metav1.GetOptions{})
@@ -314,6 +313,37 @@ func newAdminSecret(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *corev1.Se
 		return nil
 	}
 
+	type JenkinsInfo struct {
+		User 		string
+		Password 	string
+		Url			string
+		AdminEmail	string
+		AgentPort	int32
+	}
+
+	jenkinsInfo := JenkinsInfo{
+		User: jenkinsInstance.Spec.AdminUser,
+		Password: string(adminpass[:]),
+		Url: jenkinsInstance.Spec.Location,
+		AdminEmail: jenkinsInstance.Spec.AdminEmail,
+		AgentPort: jenkinsInstance.Spec.AgentPort,
+	}
+
+	// parse the groovy config template
+	configTemplate, err := template.New("jenkins-config").Parse(string(adminUserConfig[:]))
+	if err != nil {
+		glog.Errorf("Failed to parse jenkins config template: %s", err)
+		return nil
+	}
+
+	var jenkinsConfigParsed bytes.Buffer
+	if err := configTemplate.Execute(&jenkinsConfigParsed, jenkinsInfo); err != nil {
+		glog.Errorf("Failed to execute jenkins config template: %s", err)
+		return nil
+	}
+
+	authContents := fmt.Sprintf("%s:%s", jenkinsInstance.Spec.AdminUser, string(adminpass[:]))
+
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: jenkinsInstance.Spec.Name,
@@ -330,7 +360,8 @@ func newAdminSecret(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *corev1.Se
 
 		StringData: map[string]string{
 			"password": adminpass,
-			"jenkins_security.groovy": string(adminUserConfig[:]),
+			"jenkins_security.groovy": jenkinsConfigParsed.String(),
+			"cliAuth": authContents,
 		},
 
 		Type: corev1.SecretTypeOpaque,
@@ -430,21 +461,6 @@ func newDeployment(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *appsv1.Dep
 		Name:      string(jenkinsOptsName[:]),
 		Value:     string(jenkinsOptsVal[:]),
 	})
-	env = append(env, corev1.EnvVar{
-		Name:      "ADMIN_USER",
-		Value:     jenkinsInstance.Spec.AdminUser,
-	})
-	env = append(env, corev1.EnvVar{
-		Name:      "ADMIN_PASSWORD",
-		ValueFrom: &corev1.EnvVarSource {
-			SecretKeyRef: &corev1.SecretKeySelector {
-				LocalObjectReference: corev1.LocalObjectReference {
-					Name: jenkinsInstance.Spec.Name,
-				},
-				Key: "password",
-			},
-		},
-	})
 	for envVar, envVarVal := range jenkinsInstance.Spec.Env {
 		env = append(env, corev1.EnvVar{
 			Name:      envVar,
@@ -500,6 +516,11 @@ func newDeployment(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *appsv1.Dep
 									ReadOnly: true,
 									MountPath: "/var/jenkins_home/init.groovy.d",
 								},
+								{
+									Name: "cli-auth",
+									ReadOnly: true,
+									MountPath: "/var/jenkins_home/cli-auth",
+								},
 							},
 						},
 					},
@@ -514,6 +535,20 @@ func newDeployment(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *appsv1.Dep
 										{
 											Key: "jenkins_security.groovy",
 											Path: "jenkins_security.groovy",
+										},
+									},
+								},
+							},
+						},
+						{
+							Name: "cli-auth",
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource {
+									SecretName: jenkinsInstance.Spec.Name,
+									Items: []corev1.KeyToPath{
+										{
+											Key: "cliAuth",
+											Path: "cliAuth",
 										},
 									},
 								},

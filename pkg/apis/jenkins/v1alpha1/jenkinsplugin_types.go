@@ -30,8 +30,11 @@ type JenkinsPluginSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "kubebuilder generate" to regenerate code after modifying this file
 
+	// Name of this JenkinsPlugin Object
+	Name string `json:"name,omitempty"`
+
 	// ID of the JenkinsServer instance to install this plugin in
-	JenkinsServerId string `json:"jenkinsserverid,omitempty"`
+	JenkinsInstance string `json:"jenkinsserverid,omitempty"`
 
 	// plugin Id string
 	PluginId string `json:"pluginid,omitempty"`

@@ -23,6 +23,7 @@ import (
 	"github.com/maratoid/jenkins-operator/pkg/controller/jenkinsplugin"
 	"github.com/maratoid/jenkins-operator/pkg/inject/args"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -44,6 +45,9 @@ func init() {
 		}
 
 		// Add Kubernetes informers
+		if err := arguments.ControllerManager.AddInformerProvider(&batchv1.Job{}, arguments.KubernetesInformers.Batch().V1().Jobs()); err != nil {
+			return err
+		}
 		if err := arguments.ControllerManager.AddInformerProvider(&appsv1.Deployment{}, arguments.KubernetesInformers.Apps().V1().Deployments()); err != nil {
 			return err
 		}
@@ -81,7 +85,7 @@ func init() {
 			"",
 		},
 		Resources: []string{
-			"services",
+			"secrets",
 		},
 		Verbs: []string{
 			"get", "list", "watch",
@@ -89,10 +93,10 @@ func init() {
 	})
 	Injector.PolicyRules = append(Injector.PolicyRules, rbacv1.PolicyRule{
 		APIGroups: []string{
-			"",
+			"batch",
 		},
 		Resources: []string{
-			"secrets",
+			"jobs",
 		},
 		Verbs: []string{
 			"get", "list", "watch",
@@ -104,6 +108,17 @@ func init() {
 		},
 		Resources: []string{
 			"deployments",
+		},
+		Verbs: []string{
+			"get", "list", "watch",
+		},
+	})
+	Injector.PolicyRules = append(Injector.PolicyRules, rbacv1.PolicyRule{
+		APIGroups: []string{
+			"",
+		},
+		Resources: []string{
+			"services",
 		},
 		Verbs: []string{
 			"get", "list", "watch",

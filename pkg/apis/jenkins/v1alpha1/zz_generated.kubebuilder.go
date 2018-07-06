@@ -107,6 +107,9 @@ var (
 						"spec": v1beta1.JSONSchemaProps{
 							Type: "object",
 							Properties: map[string]v1beta1.JSONSchemaProps{
+								"adminemail": v1beta1.JSONSchemaProps{
+									Type: "string",
+								},
 								"adminuser": v1beta1.JSONSchemaProps{
 									Type: "string",
 								},
@@ -132,6 +135,9 @@ var (
 								"image": v1beta1.JSONSchemaProps{
 									Pattern: ".+:.+",
 									Type:    "string",
+								},
+								"location": v1beta1.JSONSchemaProps{
+									Type: "string",
 								},
 								"masterport": v1beta1.JSONSchemaProps{
 									Type:   "integer",
@@ -211,6 +217,9 @@ var (
 									},
 								},
 								"jenkinsserverid": v1beta1.JSONSchemaProps{
+									Type: "string",
+								},
+								"name": v1beta1.JSONSchemaProps{
 									Type: "string",
 								},
 								"pluginid": v1beta1.JSONSchemaProps{
