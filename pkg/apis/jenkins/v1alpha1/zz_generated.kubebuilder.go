@@ -107,6 +107,9 @@ var (
 						"spec": v1beta1.JSONSchemaProps{
 							Type: "object",
 							Properties: map[string]v1beta1.JSONSchemaProps{
+								"adminuser": v1beta1.JSONSchemaProps{
+									Type: "string",
+								},
 								"agentport": v1beta1.JSONSchemaProps{
 									Type:   "integer",
 									Format: "int32",
@@ -152,6 +155,9 @@ var (
 						"status": v1beta1.JSONSchemaProps{
 							Type: "object",
 							Properties: map[string]v1beta1.JSONSchemaProps{
+								"adminsecret": v1beta1.JSONSchemaProps{
+									Type: "string",
+								},
 								"api": v1beta1.JSONSchemaProps{
 									Type: "string",
 								},

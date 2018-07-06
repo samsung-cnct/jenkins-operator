@@ -62,6 +62,9 @@ type JenkinsInstanceSpec struct {
 
 	// Jenkins instance service type
 	ServiceType corev1.ServiceType `json:"servicetype,omitempty"`
+
+	// Admin user name
+	AdminUser string `json:"adminuser,omitempty"`
 }
 
 // JenkinsInstanceStatus defines the observed state of JenkinsInstance
@@ -70,10 +73,13 @@ type JenkinsInstanceStatus struct {
 	// Important: Run "kubebuilder generate" to regenerate code after modifying this file
 
 	// full url to newly created jenkins remote API endpoint
-	 Api string `json:"api,omitempty"`
+	Api string `json:"api,omitempty"`
 
-	 // state if jenkins server instance
-	 Phase string `json:"phase"`
+	// name of the admin secret
+	AdminSecret string `json:"adminsecret,omitempty"`
+
+	// state if jenkins server instance
+	Phase string `json:"phase"`
 }
 
 // +genclient

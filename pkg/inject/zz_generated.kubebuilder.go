@@ -44,10 +44,13 @@ func init() {
 		}
 
 		// Add Kubernetes informers
+		if err := arguments.ControllerManager.AddInformerProvider(&appsv1.Deployment{}, arguments.KubernetesInformers.Apps().V1().Deployments()); err != nil {
+			return err
+		}
 		if err := arguments.ControllerManager.AddInformerProvider(&corev1.Service{}, arguments.KubernetesInformers.Core().V1().Services()); err != nil {
 			return err
 		}
-		if err := arguments.ControllerManager.AddInformerProvider(&appsv1.Deployment{}, arguments.KubernetesInformers.Apps().V1().Deployments()); err != nil {
+		if err := arguments.ControllerManager.AddInformerProvider(&corev1.Secret{}, arguments.KubernetesInformers.Core().V1().Secrets()); err != nil {
 			return err
 		}
 
@@ -90,6 +93,17 @@ func init() {
 		},
 		Resources: []string{
 			"services",
+		},
+		Verbs: []string{
+			"get", "list", "watch",
+		},
+	})
+	Injector.PolicyRules = append(Injector.PolicyRules, rbacv1.PolicyRule{
+		APIGroups: []string{
+			"",
+		},
+		Resources: []string{
+			"secrets",
 		},
 		Verbs: []string{
 			"get", "list", "watch",

@@ -38,6 +38,8 @@ import (
 
 	"github.com/maratoid/jenkins-operator/pkg/inject/args"
 	"github.com/golang/glog"
+	"github.com/maratoid/jenkins-operator/pkg/bindata"
+	"github.com/sethvargo/go-password/password"
 	"fmt"
 )
 
@@ -84,6 +86,29 @@ func (bc *JenkinsInstanceController) Reconcile(key types.ReconcileKey) error {
 		return nil
 	}
 
+	// Get the secret with the name specified in JenkinsInstance.spec
+	secret, err := bc.KubernetesInformers.Core().V1().Secrets().Lister().Secrets(jenkinsInstance.Namespace).Get(baseName)
+	// If the resource doesn't exist, we'll create it
+	if errors.IsNotFound(err) {
+		secret, err = bc.KubernetesClientSet.CoreV1().Secrets(jenkinsInstance.Namespace).Create(newAdminSecret(jenkinsInstance))
+	}
+
+	// If an error occurs during Get/Create, we'll requeue the item so we can
+	// attempt processing again later. This could have been caused by a
+	// temporary network failure, or any other transient reason.
+	if err != nil {
+		glog.Errorf("Error creating secret: %s", err)
+		return err
+	}
+
+	// If the Secret is not controlled by this JenkinsInstance resource, we should log
+	// a warning to the event recorder and return
+	if !metav1.IsControlledBy(secret, jenkinsInstance) {
+		msg := fmt.Sprintf(MessageResourceExists, secret.Name)
+		bc.jenkinsinstancerecorder.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
+		return fmt.Errorf(msg)
+	}
+
 	// Get the deployment with the name specified in JenkinsInstance.spec
 	deployment, err := bc.KubernetesInformers.Apps().V1().Deployments().Lister().Deployments(jenkinsInstance.Namespace).Get(baseName)
 	// If the resource doesn't exist, we'll create it
@@ -100,7 +125,7 @@ func (bc *JenkinsInstanceController) Reconcile(key types.ReconcileKey) error {
 	}
 
 	// If the Deployment is not controlled by this JenkinsInstance resource, we should log
-	// a warning to the event recorder and ret
+	// a warning to the event recorder and return
 	if !metav1.IsControlledBy(deployment, jenkinsInstance) {
 		msg := fmt.Sprintf(MessageResourceExists, deployment.Name)
 		bc.jenkinsinstancerecorder.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
@@ -160,8 +185,10 @@ func (bc *JenkinsInstanceController) Reconcile(key types.ReconcileKey) error {
 // +kubebuilder:controller:group=jenkins,version=v1alpha1,kind=JenkinsInstance,resource=jenkinsinstances
 // +kubebuilder:informers:group=apps,version=v1,kind=Deployment
 // +kubebuilder:informers:group=core,version=v1,kind=Service
+// +kubebuilder:informers:group=core,version=v1,kind=Secret
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch
+// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch
 type JenkinsInstanceController struct {
 	// INSERT ADDITIONAL FIELDS HERE
 	args.InjectArgs
@@ -217,6 +244,17 @@ func ProvideController(arguments args.InjectArgs) (*controller.GenericController
 		return gc, err
 	}
 
+	// Set up an event handler for when Secret resources change. This
+	// handler will lookup the owner of the given Secret, and if it is
+	// owned by a JenkinsInstance resource will enqueue that JenkinsInstance resource for
+	// processing. This way, we don't need to implement custom logic for
+	// handling Secret resources. More info on this pattern:
+	// https://github.com/kubernetes/community/blob/8cafef897a22026d42f5e5bb3f104febe7e29830/contributors/devel/controllers.md
+	if err := gc.WatchControllerOf(&corev1.Secret{}, eventhandlers.Path{bc.LookupJenkinsInstance},
+		predicates.ResourceVersionChanged); err != nil {
+		return gc, err
+	}
+
 	// IMPORTANT:
 	// To watch additional resource types - such as those created by your controller - add gc.Watch* function calls here
 	// Watch function calls will transform each object event into a JenkinsInstance Key to be reconciled by the controller.
@@ -247,12 +285,50 @@ func (bc *JenkinsInstanceController) updateJenkinsInstanceStatus(jenkinsInstance
 	// TODO: update other status fields
 	jenkinsInstanceCopy.Status.Phase = "Ready"
 	jenkinsInstanceCopy.Status.Api = "http://" + service.Name + "." + service.Namespace + ".svc." + "cluster.local:" + string(jenkinsInstance.Spec.MasterPort)
+	jenkinsInstanceCopy.Status.AdminSecret = jenkinsInstanceCopy.Spec.Name
 	// Until #38113 is merged, we must use Update instead of UpdateStatus to
 	// update the Status block of the JenkinsInstanceC resource. UpdateStatus will not
 	// allow changes to the Spec of the resource, which is ideal for ensuring
 	// nothing other than resource status has been updated.
 	_, err := bc.Clientset.JenkinsV1alpha1().JenkinsInstances(jenkinsInstance.Namespace).Update(jenkinsInstanceCopy)
 	return err
+}
+
+// newAdminSecret creates an admin password secret for a JenkinsInstance resource. It also sets
+// the appropriate OwnerReferences on the resource so handleObject can discover
+// the JenkinsInstance resource that 'owns' it.
+func newAdminSecret(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *corev1.Secret {
+	labels := map[string]string{
+		"app":        "jenkinsci",
+		"controller": jenkinsInstance.Name,
+	}
+
+	adminpass, err := password.Generate(10, 3, 3, false, false)
+	if err != nil {
+		glog.Errorf("Error generating admin password: %s", err)
+		return nil
+	}
+
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: jenkinsInstance.Spec.Name,
+			Namespace: jenkinsInstance.Namespace,
+			Labels: labels,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(jenkinsInstance, schema.GroupVersionKind{
+					Group:   jenkinsv1alpha1.SchemeGroupVersion.Group,
+					Version: jenkinsv1alpha1.SchemeGroupVersion.Version,
+					Kind:    "JenkinsInstance",
+				}),
+			},
+		},
+
+		StringData: map[string]string{
+			"password": adminpass,
+		},
+
+		Type: corev1.SecretTypeOpaque,
+	}
 }
 
 // newService creates a new Service for a JenkinsInstance resource. It also sets
@@ -317,7 +393,52 @@ func newDeployment(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *appsv1.Dep
 		"component": string(jenkinsInstance.UID),
 	}
 
+	javaOptsName, err := bindata.Asset("java_opts")
+	if err != nil {
+		glog.Errorf("Error locating binary asset: %s", err)
+		return nil
+	}
+	javaOptsVal, err := bindata.Asset("java_opts.values")
+	if err != nil {
+		glog.Errorf("Error locating binary asset: %s", err)
+		return nil
+	}
+
+	jenkinsOptsName, err := bindata.Asset("jenkins_opts")
+	if err != nil {
+		glog.Errorf("Error locating binary asset: %s", err)
+		return nil
+	}
+	jenkinsOptsVal, err := bindata.Asset("jenkins_opts.values")
+	if err != nil {
+		glog.Errorf("Error locating binary asset: %s", err)
+		return nil
+	}
+
 	var env []corev1.EnvVar
+	env = append(env, corev1.EnvVar{
+		Name:      string(javaOptsName[:]),
+		Value:     string(javaOptsVal[:]),
+	})
+	env = append(env, corev1.EnvVar{
+		Name:      string(jenkinsOptsName[:]),
+		Value:     string(jenkinsOptsVal[:]),
+	})
+	env = append(env, corev1.EnvVar{
+		Name:      "ADMIN_USER",
+		Value:     jenkinsInstance.Spec.AdminUser,
+	})
+	env = append(env, corev1.EnvVar{
+		Name:      "ADMIN_PASSWORD",
+		ValueFrom: &corev1.EnvVarSource {
+			SecretKeyRef: &corev1.SecretKeySelector {
+				LocalObjectReference: corev1.LocalObjectReference {
+					Name: jenkinsInstance.Spec.Name,
+				},
+				Key: "password",
+			},
+		},
+	})
 	for envVar, envVarVal := range jenkinsInstance.Spec.Env {
 		env = append(env, corev1.EnvVar{
 			Name:      envVar,
