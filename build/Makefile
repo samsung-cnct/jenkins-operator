@@ -45,7 +45,7 @@ clean: remove-binary
 
 # generate bindata
 bin-data:
-	go-bindata -o $(PROJECTDIR)/pkg/bindata/data.go -ignore data\\.go -pkg bindata -prefix $(PROJECTDIR)/pkg/bindata $(PROJECTDIR)/pkg/bindata
+	go-bindata -o $(PROJECTDIR)/pkg/bindata/data.go -ignore data\\.go -pkg bindata -prefix $(PROJECTDIR)/pkg/bindata $(PROJECTDIR)/pkg/bindata/...
 
 # Generate kube builder code
 kube-builder:

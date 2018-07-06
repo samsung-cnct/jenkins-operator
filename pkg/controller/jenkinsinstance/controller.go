@@ -275,7 +275,6 @@ func (c JenkinsInstanceController) LookupJenkinsInstance(r types.ReconcileKey) (
 	return c.Informers.Jenkins().V1alpha1().JenkinsInstances().Lister().JenkinsInstances(r.Namespace).Get(r.Name)
 }
 
-
 func (bc *JenkinsInstanceController) updateJenkinsInstanceStatus(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, deployment *appsv1.Deployment, service *corev1.Service) error {
 	// NEVER modify objects from the store. It's a read-only, local cache.
 	// You can use DeepCopy() to make a deep copy of original object and modify this copy
@@ -309,6 +308,12 @@ func newAdminSecret(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *corev1.Se
 		return nil
 	}
 
+	adminUserConfig, err := bindata.Asset("init-groovy/jenkins_security.groovy")
+	if err != nil {
+		glog.Errorf("Error locating binary asset: %s", err)
+		return nil
+	}
+
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: jenkinsInstance.Spec.Name,
@@ -325,6 +330,7 @@ func newAdminSecret(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *corev1.Se
 
 		StringData: map[string]string{
 			"password": adminpass,
+			"jenkins_security.groovy": string(adminUserConfig[:]),
 		},
 
 		Type: corev1.SecretTypeOpaque,
@@ -488,9 +494,32 @@ func newDeployment(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *appsv1.Dep
 							},
 							Env: env,
 							ImagePullPolicy: jenkinsInstance.Spec.PullPolicy,
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name: "init-groovy-d",
+									ReadOnly: true,
+									MountPath: "/var/jenkins_home/init.groovy.d",
+								},
+							},
 						},
 					},
 
+					Volumes: []corev1.Volume{
+						{
+							Name: "init-groovy-d",
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource {
+									SecretName: jenkinsInstance.Spec.Name,
+									Items: []corev1.KeyToPath{
+										{
+											Key: "jenkins_security.groovy",
+											Path: "jenkins_security.groovy",
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
