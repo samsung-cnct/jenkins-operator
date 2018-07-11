@@ -27,6 +27,7 @@ import (
 	jenkinsv1alpha1lister "github.com/maratoid/jenkins-operator/pkg/client/listers/jenkins/v1alpha1"
 	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/maratoid/jenkins-operator/pkg/inject/args"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/controller/eventhandlers"
@@ -35,11 +36,32 @@ import (
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"fmt"
 	"github.com/golang/glog"
+	"bytes"
+	"github.com/maratoid/jenkins-operator/pkg/bindata"
+	"text/template"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"time"
+	"net/url"
 )
 
 // EDIT THIS FILE
 // This files was created by "kubebuilder create resource" for you to edit.
 // Controller implementation logic for JenkinsPlugin resources goes here.
+
+const (
+	// SuccessSynced is used as part of the Event 'reason' when a JenkinsPlugin is synced
+	SuccessSynced = "Synced"
+	// ErrResourceExists is used as part of the Event 'reason' when a JenkinsPlugin fails
+	// to sync due to a resource of the same name already existing.
+	ErrResourceExists = "ErrResourceExists"
+
+	// MessageResourceExists is the message used for Events when a resource
+	// fails to sync due to a resource already existing
+	MessageResourceExists = "Resource %q already exists and is not managed by JenkinsPlugin"
+	// MessageResourceSynced is the message used for an Event fired when a JenkinsPlugin
+	// is synced successfully
+	MessageResourceSynced = "JenkinsPlugin synced successfully"
+)
 
 func (bc *JenkinsPluginController) Reconcile(key types.ReconcileKey) error {
 	jenkinsPlugin, err := bc.jenkinspluginclient.
@@ -71,23 +93,98 @@ func (bc *JenkinsPluginController) Reconcile(key types.ReconcileKey) error {
 		return nil
 	}
 
-	// Get the secret with the name specified in JenkinsInstance.spec
+	// Get the jenkins instance this plugin is intended for
 	jenkinsInstance, err := bc.jenkinsinstanceLister.JenkinsInstances(jenkinsPlugin.Namespace).Get(jenkinsInstanceName)
 	// If the resource doesn't exist, we'll re-queue
 	if errors.IsNotFound(err) {
-		glog.Errorf("JenkinInstance %s referred to by JenkinsPlugin % does not exist.", jenkinsInstanceName, jenkinsPluginName)
+		glog.Errorf("JenkinsInstance %s referred to by JenkinsPlugin % does not exist.", jenkinsInstanceName, jenkinsPluginName)
 		return err
 	}
 
-	// TODO: create a kubernetes job that will use jenkins CLI to install a plugin into the found jenkins instance.
-	glog.Infof("Found jenkins instance %s", jenkinsInstance.Spec.Name)
+	// make sure the jenkins instance is ready
+	// Otherwise re-queue
+	if jenkinsInstance.Status.Phase != "Ready" {
+		glog.Errorf("JenkinsInstance %s referred to by JenkinsPlugin % is not ready.", jenkinsInstanceName, jenkinsPluginName)
+		return errors.NewBadRequest("JenkinsInstance not ready")
+	}
 
+	// Get the secret with the name specified in JenkinsInstance.status
+	secret, err := bc.KubernetesInformers.Core().V1().Secrets().Lister().Secrets(jenkinsPlugin.Namespace).Get(jenkinsInstance.Status.SetupSecret)
+	// If the resource doesn't exist, requeue
+	if errors.IsNotFound(err) {
+		glog.Errorf(
+			"JenkinsInstance %s referred to by JenkinsPlugin % is not ready: secret %s does not exist",
+			jenkinsInstanceName, jenkinsPluginName, jenkinsInstance.Spec.AdminSecret)
+		return err
+	}
+
+	// Create a kubernetes job that will use jenkins CLI to install a plugin into the found jenkins instance.
+	// Get the deployment with the name specified in JenkinsInstance.spec
+	job, err := bc.KubernetesInformers.Batch().V1().Jobs().Lister().Jobs(jenkinsPlugin.Namespace).Get(jenkinsPluginName)
+	// If the resource doesn't exist, we'll create it
+	if errors.IsNotFound(err) {
+		job, err = bc.KubernetesClientSet.BatchV1().Jobs(jenkinsPlugin.Namespace).Create(newPluginJob(jenkinsInstance, jenkinsPlugin, secret))
+	}
+
+	// If an error occurs during Get/Create, we'll requeue the item so we can
+	// attempt processing again later. This could have been caused by a
+	// temporary network failure, or any other transient reason.
+	if err != nil {
+		glog.Errorf("Error creating job: %s", err)
+		return err
+	}
+
+	// If the Job is not controlled by this JenkinsInstance resource, we should log
+	// a warning to the event recorder and return
+	if !metav1.IsControlledBy(job, jenkinsPlugin) {
+		msg := fmt.Sprintf(MessageResourceExists, job.Name)
+		bc.jenkinspluginrecorder.Event(jenkinsPlugin, corev1.EventTypeWarning, ErrResourceExists, msg)
+		return fmt.Errorf(msg)
+	}
+
+	// wait for job
+	timeout := 0
+	for timeout < 2000 {
+		if job.Status.Succeeded > 0 {
+			break
+		}
+
+		time.Sleep(5 * time.Second)
+		timeout++
+	}
+
+	// TODO Update the Job iff its observed Spec does
+	// TODO: consider other changes besides replicas number
+	//if jenkinsInstance.Spec.Replicas != nil && *jenkinsInstance.Spec.Replicas != *deployment.Spec.Replicas {
+	//	glog.V(4).Infof("jenkinsInstance %s replicas: %d, deployment replicas: %d", baseName, *jenkinsInstance.Spec.Replicas, *deployment.Spec.Replicas)
+	//	deployment, err = bc.KubernetesClientSet.AppsV1().Deployments(jenkinsInstance.Namespace).Update(newDeployment(jenkinsInstance))
+	//}
+
+	// TODO: Update the Service iff its observed Spec does
+
+	// If an error occurs during Update, we'll requeue the item so we can
+	// attempt processing again later. This could have been caused by a
+	// temporary network failure, or any other transient reason.
+	if err != nil {
+		return err
+	}
+
+	// TODO:
+	// Finally, we update the status block of the JenkinsPlugin resource to reflect the
+	// current state of the world
+	//err = bc.updateJenkinsPluginStatus(jenkinsInstance, deployment, service)
+	//if err != nil {
+	//	return err
+	//}
+
+	bc.jenkinspluginrecorder.Event(jenkinsPlugin, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
 	return nil
 }
 
 // +kubebuilder:controller:group=jenkins,version=v1alpha1,kind=JenkinsPlugin,resource=jenkinsplugins
 // +kubebuilder:informers:group=batch,version=v1,kind=Job
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch
+// +kubebuilder:informers:group=core,version=v1,kind=Secret
 type JenkinsPluginController struct {
 	args.InjectArgs
 
@@ -164,4 +261,94 @@ func (c JenkinsPluginController) LookupJenkinsPlugin(r types.ReconcileKey) (inte
 // LookupJenkinsInstance looks up a JenkinsInstance from the lister
 func (c JenkinsPluginController) LookupJenkinsInstance(r types.ReconcileKey) (interface{}, error) {
 	return c.Informers.Jenkins().V1alpha1().JenkinsInstances().Lister().JenkinsInstances(r.Namespace).Get(r.Name)
+}
+
+func newPluginJob(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, jenkinsPlugin *jenkinsv1alpha1.JenkinsPlugin, setupSecret *corev1.Secret) *batchv1.Job {
+	labels := map[string]string{
+		"app":        "jenkinsci",
+		"controller": jenkinsPlugin.Name,
+		"component": string(jenkinsPlugin.UID),
+	}
+
+	pluginConfig, err := bindata.Asset("plugin-scripts/install_plugin.sh")
+	if err != nil {
+		glog.Errorf("Error locating binary asset: %s", err)
+		return nil
+	}
+
+	type PluginInfo struct {
+		Api 			string
+		PluginId		string
+		PluginVersion	string
+	}
+
+	apiUrl, err := url.Parse(jenkinsInstance.Status.Api)
+	if err != nil {
+		glog.Errorf("Failed to parse url %s", jenkinsInstance.Status.Api)
+		return nil
+	}
+
+	apiUrl.User = url.UserPassword(string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
+	pluginInfo := PluginInfo{
+		Api: apiUrl.String(),
+		PluginId: jenkinsPlugin.Spec.PluginId,
+		PluginVersion: jenkinsPlugin.Spec.PluginVersion,
+	}
+
+	// parse the groovy config template
+	configTemplate, err := template.New("jenkins-plugin").Parse(string(pluginConfig[:]))
+	if err != nil {
+		glog.Errorf("Failed to parse plugin config template: %s", err)
+		return nil
+	}
+
+	var pluginConfigParsed bytes.Buffer
+	if err := configTemplate.Execute(&pluginConfigParsed, pluginInfo); err != nil {
+		glog.Errorf("Failed to execute plugin config template: %s", err)
+		return nil
+	}
+
+	var env []corev1.EnvVar
+	env = append(env, corev1.EnvVar{
+		Name:      "INSTALL_PLUGIN",
+		Value:     pluginConfigParsed.String(),
+	})
+
+	var backoffLimit int32 = 3
+	return &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: jenkinsPlugin.Spec.Name,
+			Namespace: jenkinsPlugin.Namespace,
+			Labels: labels,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(jenkinsPlugin, schema.GroupVersionKind{
+					Group:   jenkinsv1alpha1.SchemeGroupVersion.Group,
+					Version: jenkinsv1alpha1.SchemeGroupVersion.Version,
+					Kind:    "JenkinsPlugin",
+				}),
+			},
+		},
+
+		Spec: batchv1.JobSpec{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:            jenkinsPlugin.Spec.Name,
+							Image:           "java:latest",
+							ImagePullPolicy: "IfNotPresent",
+							Command: []string{
+								"bash",
+								"-c",
+								"eval \"$INSTALL_PLUGIN\"",
+							},
+							Env: env,
+						},
+					},
+					RestartPolicy:      corev1.RestartPolicyOnFailure,
+				},
+			},
+			BackoffLimit: &backoffLimit,
+		},
+	}
 }

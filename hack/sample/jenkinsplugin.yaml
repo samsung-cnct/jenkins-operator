@@ -3,4 +3,9 @@ kind: JenkinsPlugin
 metadata:
   name: jenkinsplugin-example
 spec:
-  foo: bar
+  name: workflow-aggregator
+  pluginid: workflow-aggregator
+  pluginversion: latest
+  jenkinsinstance: jenkinsinstance-example
+  config:
+      - ""

@@ -27,6 +27,30 @@ rules:
   - list
   - watch
 - apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - jenkins.jenkinsoperator.maratoid.github.com
   resources:
   - '*'
@@ -76,6 +100,10 @@ spec:
           type: object
         spec:
           properties:
+            adminemail:
+              type: string
+            adminuser:
+              type: string
             agentport:
               format: int32
               type: integer
@@ -90,6 +118,8 @@ spec:
               type: integer
             image:
               pattern: .+:.+
+              type: string
+            location:
               type: string
             masterport:
               format: int32
@@ -106,6 +136,8 @@ spec:
           type: object
         status:
           properties:
+            adminsecret:
+              type: string
             api:
               type: string
             phase:
@@ -150,11 +182,11 @@ spec:
               items:
                 type: string
               type: array
-            jenkinsserverid:
+            jenkinsinstance:
               type: string
-            pluginid:
+            name:
               type: string
-            version:
+            pluginurl:
               type: string
           type: object
         status:

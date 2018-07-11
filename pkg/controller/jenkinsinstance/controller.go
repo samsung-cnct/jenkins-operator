@@ -27,6 +27,7 @@ import (
 	jenkinsv1alpha1client "github.com/maratoid/jenkins-operator/pkg/client/clientset/versioned/typed/jenkins/v1alpha1"
 	jenkinsv1alpha1informer "github.com/maratoid/jenkins-operator/pkg/client/informers/externalversions/jenkins/v1alpha1"
 	jenkinsv1alpha1lister "github.com/maratoid/jenkins-operator/pkg/client/listers/jenkins/v1alpha1"
+	"github.com/maratoid/jenkins-operator/pkg/util"
 
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,10 +40,13 @@ import (
 	"github.com/maratoid/jenkins-operator/pkg/inject/args"
 	"github.com/golang/glog"
 	"github.com/maratoid/jenkins-operator/pkg/bindata"
-	"github.com/sethvargo/go-password/password"
+	"github.com/sethgrid/pester"
 	"fmt"
 	"text/template"
 	"bytes"
+	"github.com/PuerkitoBio/goquery"
+	"net/http"
+	goerr "errors"
 )
 
 // EDIT THIS FILE
@@ -50,18 +54,18 @@ import (
 // Controller implementation logic for JenkinsInstance resources goes here.
 
 const (
-	// SuccessSynced is used as part of the Event 'reason' when a Foo is synced
+	// SuccessSynced is used as part of the Event 'reason' when a JenkinsInstance is synced
 	SuccessSynced = "Synced"
-	// ErrResourceExists is used as part of the Event 'reason' when a Foo fails
-	// to sync due to a Deployment of the same name already existing.
+	// ErrResourceExists is used as part of the Event 'reason' when a JenkinsInstance fails
+	// to sync due to a resource of the same name already existing.
 	ErrResourceExists = "ErrResourceExists"
 
 	// MessageResourceExists is the message used for Events when a resource
-	// fails to sync due to a Deployment already existing
-	MessageResourceExists = "Resource %q already exists and is not managed by Foo"
-	// MessageResourceSynced is the message used for an Event fired when a Foo
+	// fails to sync due to a resource already existing
+	MessageResourceExists = "Resource %q already exists and is not managed by JenkinsInstance"
+	// MessageResourceSynced is the message used for an Event fired when a JenkinsInstance
 	// is synced successfully
-	MessageResourceSynced = "Foo synced successfully"
+	MessageResourceSynced = "JenkinsInstance synced successfully"
 )
 
 func (bc *JenkinsInstanceController) Reconcile(key types.ReconcileKey) error {
@@ -85,11 +89,26 @@ func (bc *JenkinsInstanceController) Reconcile(key types.ReconcileKey) error {
 		return nil
 	}
 
+	adminSecretName := jenkinsInstance.Spec.AdminSecret
+	if adminSecretName == "" {
+		// We choose to absorb the error here as the worker would requeue the
+		// resource otherwise. Instead, the next time the resource is updated
+		// the resource will be queued again.
+		runtime.HandleError(fmt.Errorf("%s: AdminSecret name must be specified", key.String()))
+		return nil
+	}
+
+	adminSecret, err := bc.KubernetesInformers.Core().V1().Secrets().Lister().Secrets(jenkinsInstance.Namespace).Get(adminSecretName)
+	if errors.IsNotFound(err) {
+		glog.Errorf("AdminSecret %s does not exist yet: %v", adminSecretName, err)
+		return err
+	}
+
 	// Get the secret with the name specified in JenkinsInstance.spec
-	secret, err := bc.KubernetesInformers.Core().V1().Secrets().Lister().Secrets(jenkinsInstance.Namespace).Get(baseName)
+	setupSecret, err := bc.KubernetesInformers.Core().V1().Secrets().Lister().Secrets(jenkinsInstance.Namespace).Get(baseName)
 	// If the resource doesn't exist, we'll create it
 	if errors.IsNotFound(err) {
-		secret, err = bc.KubernetesClientSet.CoreV1().Secrets(jenkinsInstance.Namespace).Create(newAdminSecret(jenkinsInstance))
+		setupSecret, err = bc.KubernetesClientSet.CoreV1().Secrets(jenkinsInstance.Namespace).Create(newSetupSecret(jenkinsInstance, adminSecret))
 	}
 
 	// If an error occurs during Get/Create, we'll requeue the item so we can
@@ -102,8 +121,8 @@ func (bc *JenkinsInstanceController) Reconcile(key types.ReconcileKey) error {
 
 	// If the Secret is not controlled by this JenkinsInstance resource, we should log
 	// a warning to the event recorder and return
-	if !metav1.IsControlledBy(secret, jenkinsInstance) {
-		msg := fmt.Sprintf(MessageResourceExists, secret.Name)
+	if !metav1.IsControlledBy(setupSecret, jenkinsInstance) {
+		msg := fmt.Sprintf(MessageResourceExists, setupSecret.Name)
 		bc.jenkinsinstancerecorder.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
 		return fmt.Errorf(msg)
 	}
@@ -146,7 +165,7 @@ func (bc *JenkinsInstanceController) Reconcile(key types.ReconcileKey) error {
 		return err
 	}
 
-	// If the Deployment is not controlled by this JenkinsInstance resource, we should log
+	// If the Service is not controlled by this JenkinsInstance resource, we should log
 	// a warning to the event recorder and ret
 	if !metav1.IsControlledBy(service, jenkinsInstance) {
 		msg := fmt.Sprintf(MessageResourceExists, service.Name)
@@ -172,7 +191,7 @@ func (bc *JenkinsInstanceController) Reconcile(key types.ReconcileKey) error {
 
 	// Finally, we update the status block of the JenkinsInstance resource to reflect the
 	// current state of the world
-	err = bc.updateJenkinsInstanceStatus(jenkinsInstance, deployment, service)
+	err = bc.updateJenkinsInstanceStatus(jenkinsInstance, deployment, service, adminSecret, setupSecret)
 	if err != nil {
 		return err
 	}
@@ -270,41 +289,59 @@ func ProvideController(arguments args.InjectArgs) (*controller.GenericController
 }
 
 // LookupJenkinsInstance looks up a JenkinsInstance from the lister
-func (c JenkinsInstanceController) LookupJenkinsInstance(r types.ReconcileKey) (interface{}, error) {
-	return c.Informers.Jenkins().V1alpha1().JenkinsInstances().Lister().JenkinsInstances(r.Namespace).Get(r.Name)
+func (bc JenkinsInstanceController) LookupJenkinsInstance(r types.ReconcileKey) (interface{}, error) {
+	return bc.Informers.Jenkins().V1alpha1().JenkinsInstances().Lister().JenkinsInstances(r.Namespace).Get(r.Name)
 }
 
-func (bc *JenkinsInstanceController) updateJenkinsInstanceStatus(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, deployment *appsv1.Deployment, service *corev1.Service) error {
+func (bc *JenkinsInstanceController) updateJenkinsInstanceStatus(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, deployment *appsv1.Deployment, service *corev1.Service, adminSecret *corev1.Secret, setupSecret *corev1.Secret) error {
 	// NEVER modify objects from the store. It's a read-only, local cache.
 	// You can use DeepCopy() to make a deep copy of original object and modify this copy
 	// Or create a copy manually for better performance
 	jenkinsInstanceCopy := jenkinsInstance.DeepCopy()
 
+	// use admin secret data to get the user configuration page and parse out an api token
+	apiToken, err := getJenkinsApiToken(jenkinsInstance, service, adminSecret)
+	if err != nil {
+		glog.Errorf("Error: %v", err)
+		return err
+	}
+
+	setupSecretCopy := setupSecret.DeepCopy()
+	setupSecretCopy.Data["user"] = adminSecret.Data["user"]
+	setupSecretCopy.Data["apiToken"] = []byte(apiToken)
+	_, err = bc.KubernetesClientSet.CoreV1().Secrets(jenkinsInstance.Namespace).Update(setupSecretCopy)
+	if err != nil {
+		glog.Errorf("Error updating secret %s: %v", setupSecret.Name, err)
+		return err
+	}
+
+
 	// TODO: update other status fields
+	api, err := util.GetServiceEndpoint(service, "", 8080)
+	if err != nil {
+		return err
+	}
+
+	jenkinsInstanceCopy.Status.Api = api
+	jenkinsInstanceCopy.Status.SetupSecret = setupSecretCopy.Name
 	jenkinsInstanceCopy.Status.Phase = "Ready"
-	jenkinsInstanceCopy.Status.Api = "http://" + service.Name + "." + service.Namespace + ".svc." + "cluster.local:" + string(jenkinsInstance.Spec.MasterPort)
-	jenkinsInstanceCopy.Status.AdminSecret = jenkinsInstanceCopy.Spec.Name
+
 	// Until #38113 is merged, we must use Update instead of UpdateStatus to
 	// update the Status block of the JenkinsInstanceC resource. UpdateStatus will not
 	// allow changes to the Spec of the resource, which is ideal for ensuring
 	// nothing other than resource status has been updated.
-	_, err := bc.Clientset.JenkinsV1alpha1().JenkinsInstances(jenkinsInstance.Namespace).Update(jenkinsInstanceCopy)
+	_, err = bc.Clientset.JenkinsV1alpha1().JenkinsInstances(jenkinsInstance.Namespace).Update(jenkinsInstanceCopy)
 	return err
 }
 
-// newAdminSecret creates an admin password secret for a JenkinsInstance resource. It also sets
+// newSetupSecret creates an admin password secret for a JenkinsInstance resource. It also sets
 // the appropriate OwnerReferences on the resource so handleObject can discover
 // the JenkinsInstance resource that 'owns' it.
-func newAdminSecret(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *corev1.Secret {
+func newSetupSecret(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, adminSecret *corev1.Secret) *corev1.Secret {
 	labels := map[string]string{
 		"app":        "jenkinsci",
 		"controller": jenkinsInstance.Name,
-	}
-
-	adminpass, err := password.Generate(10, 3, 3, false, false)
-	if err != nil {
-		glog.Errorf("Error generating admin password: %s", err)
-		return nil
+		"component": string(jenkinsInstance.UID),
 	}
 
 	adminUserConfig, err := bindata.Asset("init-groovy/jenkins_security.groovy")
@@ -319,14 +356,24 @@ func newAdminSecret(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *corev1.Se
 		Url			string
 		AdminEmail	string
 		AgentPort	int32
+		Executors	int32
+	}
+
+	// decode Admin secret strings
+	adminUser := string(adminSecret.Data["user"][:])
+	adminPassword := string(adminSecret.Data["pass"][:])
+	if err != nil {
+		glog.Errorf("ErrorDecoding admin secret %s pass: %v", adminSecret.Name, err)
+		return nil
 	}
 
 	jenkinsInfo := JenkinsInfo{
-		User: jenkinsInstance.Spec.AdminUser,
-		Password: string(adminpass[:]),
+		User: string(adminUser[:]),
+		Password: string(adminPassword[:]),
 		Url: jenkinsInstance.Spec.Location,
 		AdminEmail: jenkinsInstance.Spec.AdminEmail,
 		AgentPort: jenkinsInstance.Spec.AgentPort,
+		Executors: jenkinsInstance.Spec.Executors,
 	}
 
 	// parse the groovy config template
@@ -342,7 +389,7 @@ func newAdminSecret(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *corev1.Se
 		return nil
 	}
 
-	authContents := fmt.Sprintf("%s:%s", jenkinsInstance.Spec.AdminUser, string(adminpass[:]))
+	authContents := fmt.Sprintf("%s:%s", adminUser, adminPassword)
 
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -359,7 +406,6 @@ func newAdminSecret(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *corev1.Se
 		},
 
 		StringData: map[string]string{
-			"password": adminpass,
 			"jenkins_security.groovy": jenkinsConfigParsed.String(),
 			"cliAuth": authContents,
 		},
@@ -375,6 +421,7 @@ func newService(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *corev1.Servic
 	labels := map[string]string{
 		"app":        "jenkinsci",
 		"controller": jenkinsInstance.Name,
+		"component": string(jenkinsInstance.UID),
 	}
 
 	return &corev1.Service{
@@ -560,3 +607,62 @@ func newDeployment(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *appsv1.Dep
 		},
 	}
 }
+
+func getJenkinsApiToken(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, service *corev1.Service, adminSecret *corev1.Secret) (string, error) {
+
+	serviceUrl, err := util.GetServiceEndpoint(service, "me/configure", 8080)
+	if err != nil {
+		return "", err
+	}
+
+	adminUser := string(adminSecret.Data["user"][:])
+	adminPassword := string(adminSecret.Data["pass"][:])
+
+	// get the user config page
+	req, err := http.NewRequest("GET", serviceUrl, nil)
+	if err != nil {
+		glog.Errorf("Error creating GET request to %s", serviceUrl)
+		return "", err
+	}
+
+	req.SetBasicAuth(string(adminUser[:]), string(adminPassword[:]))
+	if err != nil {
+		glog.Errorf("Error setting basic auth on GET request to %s", serviceUrl)
+		return "", err
+	}
+
+	client := pester.New()
+	client.MaxRetries = 5
+	client.Backoff = pester.ExponentialBackoff
+	client.KeepLog = true
+
+	resp, err := client.Do(req)
+	if err != nil {
+		glog.Errorf("Error performing GET request to %s: %v", serviceUrl, err)
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		glog.Errorf("Error parsing response: %v", err)
+		return "", err
+	}
+
+	var apiToken string = ""
+	doc.Find("input#apiToken").Each(func(i int, element *goquery.Selection) {
+		value, exists := element.Attr("value")
+		if exists {
+			apiToken = value
+		}
+	})
+
+	if apiToken == "" {
+		err = goerr.New("element 'apiToken' missing value")
+	} else {
+		err = nil
+	}
+
+	return apiToken, err
+}
+

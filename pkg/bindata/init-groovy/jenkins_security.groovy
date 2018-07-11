@@ -33,4 +33,6 @@ println "--> setting up JNLP"
 Set<String> agentProtocolsList = ['JNLP4-connect', 'Ping']
 Jenkins.instance.setAgentProtocols(agentProtocolsList)
 Jenkins.instance.setSlaveAgentPort({{ .AgentPort }})
+
+Jenkins.instance.setNumExecutors({{ .Executors }})
 Jenkins.instance.save()

@@ -110,7 +110,7 @@ var (
 								"adminemail": v1beta1.JSONSchemaProps{
 									Type: "string",
 								},
-								"adminuser": v1beta1.JSONSchemaProps{
+								"adminsecret": v1beta1.JSONSchemaProps{
 									Type: "string",
 								},
 								"agentport": v1beta1.JSONSchemaProps{
@@ -216,7 +216,7 @@ var (
 										},
 									},
 								},
-								"jenkinsserverid": v1beta1.JSONSchemaProps{
+								"jenkinsinstance": v1beta1.JSONSchemaProps{
 									Type: "string",
 								},
 								"name": v1beta1.JSONSchemaProps{
@@ -225,7 +225,7 @@ var (
 								"pluginid": v1beta1.JSONSchemaProps{
 									Type: "string",
 								},
-								"version": v1beta1.JSONSchemaProps{
+								"pluginversion": v1beta1.JSONSchemaProps{
 									Type: "string",
 								},
 							},

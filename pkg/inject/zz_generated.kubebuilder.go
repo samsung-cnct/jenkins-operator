@@ -21,6 +21,7 @@ import (
 	rscheme "github.com/maratoid/jenkins-operator/pkg/client/clientset/versioned/scheme"
 	"github.com/maratoid/jenkins-operator/pkg/controller/jenkinsinstance"
 	"github.com/maratoid/jenkins-operator/pkg/controller/jenkinsplugin"
+	"github.com/maratoid/jenkins-operator/pkg/controller/secret"
 	"github.com/maratoid/jenkins-operator/pkg/inject/args"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -45,9 +46,6 @@ func init() {
 		}
 
 		// Add Kubernetes informers
-		if err := arguments.ControllerManager.AddInformerProvider(&batchv1.Job{}, arguments.KubernetesInformers.Batch().V1().Jobs()); err != nil {
-			return err
-		}
 		if err := arguments.ControllerManager.AddInformerProvider(&appsv1.Deployment{}, arguments.KubernetesInformers.Apps().V1().Deployments()); err != nil {
 			return err
 		}
@@ -57,6 +55,9 @@ func init() {
 		if err := arguments.ControllerManager.AddInformerProvider(&corev1.Secret{}, arguments.KubernetesInformers.Core().V1().Secrets()); err != nil {
 			return err
 		}
+		if err := arguments.ControllerManager.AddInformerProvider(&batchv1.Job{}, arguments.KubernetesInformers.Batch().V1().Jobs()); err != nil {
+			return err
+		}
 
 		if c, err := jenkinsinstance.ProvideController(arguments); err != nil {
 			return err
@@ -64,6 +65,11 @@ func init() {
 			arguments.ControllerManager.AddController(c)
 		}
 		if c, err := jenkinsplugin.ProvideController(arguments); err != nil {
+			return err
+		} else {
+			arguments.ControllerManager.AddController(c)
+		}
+		if c, err := secret.ProvideController(arguments); err != nil {
 			return err
 		} else {
 			arguments.ControllerManager.AddController(c)
@@ -82,28 +88,6 @@ func init() {
 	})
 	Injector.PolicyRules = append(Injector.PolicyRules, rbacv1.PolicyRule{
 		APIGroups: []string{
-			"",
-		},
-		Resources: []string{
-			"secrets",
-		},
-		Verbs: []string{
-			"get", "list", "watch",
-		},
-	})
-	Injector.PolicyRules = append(Injector.PolicyRules, rbacv1.PolicyRule{
-		APIGroups: []string{
-			"batch",
-		},
-		Resources: []string{
-			"jobs",
-		},
-		Verbs: []string{
-			"get", "list", "watch",
-		},
-	})
-	Injector.PolicyRules = append(Injector.PolicyRules, rbacv1.PolicyRule{
-		APIGroups: []string{
 			"apps",
 		},
 		Resources: []string{
@@ -119,6 +103,28 @@ func init() {
 		},
 		Resources: []string{
 			"services",
+		},
+		Verbs: []string{
+			"get", "list", "watch",
+		},
+	})
+	Injector.PolicyRules = append(Injector.PolicyRules, rbacv1.PolicyRule{
+		APIGroups: []string{
+			"",
+		},
+		Resources: []string{
+			"secrets",
+		},
+		Verbs: []string{
+			"get", "list", "watch",
+		},
+	})
+	Injector.PolicyRules = append(Injector.PolicyRules, rbacv1.PolicyRule{
+		APIGroups: []string{
+			"batch",
+		},
+		Resources: []string{
+			"jobs",
 		},
 		Verbs: []string{
 			"get", "list", "watch",

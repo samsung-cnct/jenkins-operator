@@ -8,6 +8,12 @@
   version = "v0.21.0"
 
 [[projects]]
+  name = "github.com/PuerkitoBio/goquery"
+  packages = ["."]
+  revision = "dc2ec5c7ca4d9aae063b79b9f581dd3ea6afd2b2"
+  version = "v1.4.1"
+
+[[projects]]
   name = "github.com/PuerkitoBio/purell"
   packages = ["."]
   revision = "0bcb03f4b4d0a9428594752bd2a3b9aa0a9d4bd4"
@@ -17,6 +23,12 @@
   name = "github.com/PuerkitoBio/urlesc"
   packages = ["."]
   revision = "de5bf2ad457846296e2031421a34e2568e304e35"
+
+[[projects]]
+  name = "github.com/andybalholm/cascadia"
+  packages = ["."]
+  revision = "901648c87902174f774fac311d7f176f8647bdaa"
+  version = "v1.0.0"
 
 [[projects]]
   name = "github.com/davecgh/go-spew"
@@ -265,10 +277,10 @@
   version = "v1.2.0"
 
 [[projects]]
-  name = "github.com/sethvargo/go-password"
-  packages = ["password"]
-  revision = "d207206009266fab3e355f1a0488b47ac24139c7"
-  version = "v0.1.1"
+  name = "github.com/sethgrid/pester"
+  packages = ["."]
+  revision = "03e26c9abbbf5accb8349790bf9f41bde09d72c3"
+  version = "1.0.0"
 
 [[projects]]
   name = "github.com/spf13/afero"
@@ -670,6 +682,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "c05711b40d73d0121dfc03e135a70096f225f5c6626c80f05267e8a4aa2e8595"
+  inputs-digest = "d51bcdcff08626e0203e944d1a91799ef9a5d0ed22c68c68d8d4f096ba526e48"
   solver-name = "gps-cdcl"
   solver-version = 1

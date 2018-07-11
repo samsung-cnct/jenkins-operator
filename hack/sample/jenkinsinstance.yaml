@@ -15,6 +15,6 @@ spec:
   replicas: 1
   pullpolicy: Always
   servicetype: NodePort
-  adminuser: admin
+  adminsecret: jenkins-test
   location: jenkins.example.com
   adminemail: admin@example.com

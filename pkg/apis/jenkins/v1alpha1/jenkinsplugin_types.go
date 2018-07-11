@@ -34,13 +34,13 @@ type JenkinsPluginSpec struct {
 	Name string `json:"name,omitempty"`
 
 	// ID of the JenkinsServer instance to install this plugin in
-	JenkinsInstance string `json:"jenkinsserverid,omitempty"`
+	JenkinsInstance string `json:"jenkinsinstance,omitempty"`
 
 	// plugin Id string
 	PluginId string `json:"pluginid,omitempty"`
 
-	// plugin version
-	Version string `json:"version,omitempty"`
+	// plugin Version string
+	PluginVersion string `json:"pluginversion,omitempty"`
 
 	// Groovy configuration scripts
 	Config []string `json:"config,omitempty"`

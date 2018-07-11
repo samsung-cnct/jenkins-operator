@@ -51,6 +51,8 @@ type JenkinsInstanceSpec struct {
 	// How many executors
 	Executors int32 `json:"executors,omitempty"`
 
+	AdminSecret string `json:"adminsecret,omitempty"`
+
 	// Groovy configuration scripts
 	Config []string `json:"config,omitempty"`
 
@@ -62,9 +64,6 @@ type JenkinsInstanceSpec struct {
 
 	// Jenkins instance service type
 	ServiceType corev1.ServiceType `json:"servicetype,omitempty"`
-
-	// Admin user name
-	AdminUser string `json:"adminuser,omitempty"`
 
 	// Jenkins location
 	Location string `json:"location,omitempty"`
@@ -81,8 +80,8 @@ type JenkinsInstanceStatus struct {
 	// full url to newly created jenkins remote API endpoint
 	Api string `json:"api,omitempty"`
 
-	// name of the admin secret
-	AdminSecret string `json:"adminsecret,omitempty"`
+	// api token
+	SetupSecret string `json:"adminsecret,omitempty"`
 
 	// state if jenkins server instance
 	Phase string `json:"phase"`
