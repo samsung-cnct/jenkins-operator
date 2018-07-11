@@ -47,6 +47,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"net/http"
 	goerr "errors"
+	"k8s.io/apimachinery/pkg/labels"
 )
 
 // EDIT THIS FILE
@@ -272,6 +273,38 @@ func ProvideController(arguments args.InjectArgs) (*controller.GenericController
 		predicates.ResourceVersionChanged); err != nil {
 		return gc, err
 	}
+
+	// Set up an event handler for when Secret resources not owned by the JenkinsInstance change
+	// This is needed for re-loading login information from the pre-provided secret
+	// When admin login secret changes, WatchTransformationKeysOf will list all JenkinsInstances
+	// and re-enqueue the keys for the ones that refer to that admin login secret via their spec.
+	gc.WatchTransformationKeysOf(&corev1.Secret{},func(i interface{}) []types.ReconcileKey {
+		p, ok := i.(*corev1.Secret)
+		if !ok {
+			return []types.ReconcileKey{}
+		}
+
+		// list all jenkins instances and look for ones referring to this secret via CR spec
+		instances, err := bc.Informers.Jenkins().V1alpha1().JenkinsInstances().Lister().JenkinsInstances(p.Namespace).List(labels.Everything())
+		if err != nil {
+			glog.Errorf("Could not list JenkinsInstances")
+			return []types.ReconcileKey{}
+		}
+
+		var keys []types.ReconcileKey
+		for _, inst := range instances {
+			if inst.Spec.AdminSecret == p.Name {
+				keys = append(keys, types.ReconcileKey {
+					Namespace: p.Namespace,
+					Name: inst.Name,
+				})
+			}
+		}
+
+		// return found keys
+		return keys
+	},
+	)
 
 	// IMPORTANT:
 	// To watch additional resource types - such as those created by your controller - add gc.Watch* function calls here

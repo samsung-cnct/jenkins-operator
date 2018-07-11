@@ -21,7 +21,6 @@ import (
 	rscheme "github.com/maratoid/jenkins-operator/pkg/client/clientset/versioned/scheme"
 	"github.com/maratoid/jenkins-operator/pkg/controller/jenkinsinstance"
 	"github.com/maratoid/jenkins-operator/pkg/controller/jenkinsplugin"
-	"github.com/maratoid/jenkins-operator/pkg/controller/secret"
 	"github.com/maratoid/jenkins-operator/pkg/inject/args"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -65,11 +64,6 @@ func init() {
 			arguments.ControllerManager.AddController(c)
 		}
 		if c, err := jenkinsplugin.ProvideController(arguments); err != nil {
-			return err
-		} else {
-			arguments.ControllerManager.AddController(c)
-		}
-		if c, err := secret.ProvideController(arguments); err != nil {
 			return err
 		} else {
 			arguments.ControllerManager.AddController(c)
