@@ -102,7 +102,7 @@ spec:
           properties:
             adminemail:
               type: string
-            adminuser:
+            adminsecret:
               type: string
             agentport:
               format: int32
@@ -178,15 +178,15 @@ spec:
           type: object
         spec:
           properties:
-            config:
-              items:
-                type: string
-              type: array
             jenkinsinstance:
               type: string
             name:
               type: string
-            pluginurl:
+            pluginconfig:
+              type: string
+            pluginid:
+              type: string
+            pluginversion:
               type: string
           type: object
         status:

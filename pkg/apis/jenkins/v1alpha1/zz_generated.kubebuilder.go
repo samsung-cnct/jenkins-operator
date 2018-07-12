@@ -208,18 +208,13 @@ var (
 						"spec": v1beta1.JSONSchemaProps{
 							Type: "object",
 							Properties: map[string]v1beta1.JSONSchemaProps{
-								"config": v1beta1.JSONSchemaProps{
-									Type: "array",
-									Items: &v1beta1.JSONSchemaPropsOrArray{
-										Schema: &v1beta1.JSONSchemaProps{
-											Type: "string",
-										},
-									},
-								},
 								"jenkinsinstance": v1beta1.JSONSchemaProps{
 									Type: "string",
 								},
 								"name": v1beta1.JSONSchemaProps{
+									Type: "string",
+								},
+								"pluginconfig": v1beta1.JSONSchemaProps{
 									Type: "string",
 								},
 								"pluginid": v1beta1.JSONSchemaProps{

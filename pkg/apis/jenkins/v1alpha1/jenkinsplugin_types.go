@@ -43,7 +43,7 @@ type JenkinsPluginSpec struct {
 	PluginVersion string `json:"pluginversion,omitempty"`
 
 	// Groovy configuration scripts
-	Config []string `json:"config,omitempty"`
+	PluginConfig string `json:"pluginconfig,omitempty"`
 }
 
 // JenkinsPluginStatus defines the observed state of JenkinsPlugin

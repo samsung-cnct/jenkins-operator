@@ -280,6 +280,7 @@ func newPluginJob(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, jenkinsPlugi
 		Api 			string
 		PluginId		string
 		PluginVersion	string
+		PluginConfig	string
 	}
 
 	apiUrl, err := url.Parse(jenkinsInstance.Status.Api)
@@ -293,6 +294,7 @@ func newPluginJob(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, jenkinsPlugi
 		Api: apiUrl.String(),
 		PluginId: jenkinsPlugin.Spec.PluginId,
 		PluginVersion: jenkinsPlugin.Spec.PluginVersion,
+		PluginConfig: jenkinsPlugin.Spec.PluginConfig,
 	}
 
 	// parse the groovy config template
