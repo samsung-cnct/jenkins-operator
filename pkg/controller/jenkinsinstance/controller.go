@@ -519,6 +519,7 @@ func newDeployment(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *appsv1.Dep
 		"component": string(jenkinsInstance.UID),
 	}
 
+	// get binary data for variables and groovy config
 	javaOptsName, err := bindata.Asset("java_opts")
 	if err != nil {
 		glog.Errorf("Error locating binary asset: %s", err)
@@ -541,6 +542,7 @@ func newDeployment(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *appsv1.Dep
 		return nil
 	}
 
+	// Create environment variables
 	var env []corev1.EnvVar
 	env = append(env, corev1.EnvVar{
 		Name:      string(javaOptsName[:]),
@@ -557,10 +559,27 @@ func newDeployment(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *appsv1.Dep
 		})
 	}
 
+	// build a command string to install plugins and launch jenkins
 	commandString := ""
 	commandString += "/usr/local/bin/install-plugins.sh $(cat /var/jenkins_home/init.groovy.d/plugins.txt | tr '\\n' ' ') && "
 	commandString += "/sbin/tini -- /usr/local/bin/jenkins.sh"
 	commandString += ""
+
+	// Get the correct volume source to use
+	pvcName := jenkinsInstance.Spec.JobsPvc
+	var volumeSource corev1.VolumeSource
+	if pvcName == "" {
+		volumeSource = corev1.VolumeSource {
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		}
+	} else {
+		volumeSource = corev1.VolumeSource{
+			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+				ClaimName: pvcName,
+				ReadOnly: false,
+			},
+		}
+	}
 
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -612,8 +631,13 @@ func newDeployment(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *appsv1.Dep
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "init-groovy-d",
-									ReadOnly:  true,
+									ReadOnly:  false,
 									MountPath: "/var/jenkins_home/init.groovy.d",
+								},
+								{
+									Name:      "job-storage",
+									ReadOnly:  false,
+									MountPath: "/var/jenkins_home/jobs",
 								},
 							},
 						},
@@ -627,6 +651,10 @@ func newDeployment(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *appsv1.Dep
 									SecretName: jenkinsInstance.Spec.Name,
 								},
 							},
+						},
+						{
+							Name: "job-storage",
+							VolumeSource: volumeSource,
 						},
 					},
 				},

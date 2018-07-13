@@ -79,6 +79,9 @@ type JenkinsInstanceSpec struct {
 
 	// Jenkins admin email
 	AdminEmail string `json:"adminemail,omitempty"`
+
+	// Name of pre-existing PVC for jobs
+	JobsPvc string `json:"jobspvc,omitempty"`
 }
 
 // JenkinsInstanceStatus defines the observed state of JenkinsInstance

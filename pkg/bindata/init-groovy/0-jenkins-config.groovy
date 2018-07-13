@@ -4,6 +4,7 @@ import jenkins.model.*
 import hudson.security.*
 import jenkins.model.JenkinsLocationConfiguration
 import hudson.security.csrf.DefaultCrumbIssuer
+import jenkins.security.s2m.*
 
 def instance = Jenkins.getInstance()
 println "--> creating local user '{{.User}}'"
@@ -31,8 +32,11 @@ Set<String> agentProtocolsList = ['JNLP4-connect', 'Ping']
 instance.setAgentProtocols(agentProtocolsList)
 instance.setSlaveAgentPort({{ .AgentPort }})
 instance.setNumExecutors({{ .Executors }})
-instance.save()
 
+println "--> enable Agent to master security subsystem"
+instance.injector.getInstance(AdminWhitelistRule.class).setMasterKillSwitch(false);
+
+instance.save()
 
 
 

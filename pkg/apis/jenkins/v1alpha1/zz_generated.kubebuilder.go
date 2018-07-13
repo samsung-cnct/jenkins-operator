@@ -131,6 +131,9 @@ var (
 									Pattern: ".+:.+",
 									Type:    "string",
 								},
+								"jobspvc": v1beta1.JSONSchemaProps{
+									Type: "string",
+								},
 								"location": v1beta1.JSONSchemaProps{
 									Type: "string",
 								},

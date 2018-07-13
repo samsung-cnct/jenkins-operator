@@ -10,6 +10,13 @@ spec:
   masterport: 8080
   agentport: 50000
   executors: 2
+  replicas: 1
+  pullpolicy: Always
+  servicetype: NodePort
+  adminsecret: jenkins-test
+  jobspvc: jenkins-test
+  location: https://jenkins.example.com
+  adminemail: admin@example.com
   plugins:
     - id: credentials
       version: 2.1.17
@@ -32,9 +39,3 @@ spec:
     SystemCredentialsProvider.getInstance().getStore().addCredentials(
       Domain.global(),
       githubScanCreds)
-  replicas: 1
-  pullpolicy: Always
-  servicetype: NodePort
-  adminsecret: jenkins-test
-  location: jenkins.example.com
-  adminemail: admin@example.com
