@@ -6,7 +6,6 @@ import jenkins.model.JenkinsLocationConfiguration
 import hudson.security.csrf.DefaultCrumbIssuer
 
 def instance = Jenkins.getInstance()
-
 println "--> creating local user '{{.User}}'"
 
 def hudsonRealm = new HudsonPrivateSecurityRealm(false)
@@ -16,7 +15,6 @@ instance.setSecurityRealm(hudsonRealm)
 def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
 strategy.setAllowAnonymousRead(false)
 instance.setAuthorizationStrategy(strategy)
-instance.save()
 
 println "--> setting jenkins url '{{.Url}}'"
 
@@ -26,13 +24,15 @@ jenkinsLocation.setAdminAddress('{{.AdminEmail}}')
 jenkinsLocation.save()
 
 println "--> setting up default crumbs issuer"
-Jenkins.instance.setCrumbIssuer(new DefaultCrumbIssuer(true))
-Jenkins.instance.save()
+instance.setCrumbIssuer(new DefaultCrumbIssuer(true))
 
 println "--> setting up JNLP"
 Set<String> agentProtocolsList = ['JNLP4-connect', 'Ping']
-Jenkins.instance.setAgentProtocols(agentProtocolsList)
-Jenkins.instance.setSlaveAgentPort({{ .AgentPort }})
+instance.setAgentProtocols(agentProtocolsList)
+instance.setSlaveAgentPort({{ .AgentPort }})
+instance.setNumExecutors({{ .Executors }})
+instance.save()
 
-Jenkins.instance.setNumExecutors({{ .Executors }})
-Jenkins.instance.save()
+
+
+

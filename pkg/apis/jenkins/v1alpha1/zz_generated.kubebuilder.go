@@ -118,12 +118,7 @@ var (
 									Format: "int32",
 								},
 								"config": v1beta1.JSONSchemaProps{
-									Type: "array",
-									Items: &v1beta1.JSONSchemaPropsOrArray{
-										Schema: &v1beta1.JSONSchemaProps{
-											Type: "string",
-										},
-									},
+									Type: "string",
 								},
 								"env": v1beta1.JSONSchemaProps{
 									Type: "object",
@@ -145,6 +140,22 @@ var (
 								},
 								"name": v1beta1.JSONSchemaProps{
 									Type: "string",
+								},
+								"plugins": v1beta1.JSONSchemaProps{
+									Type: "array",
+									Items: &v1beta1.JSONSchemaPropsOrArray{
+										Schema: &v1beta1.JSONSchemaProps{
+											Type: "object",
+											Properties: map[string]v1beta1.JSONSchemaProps{
+												"id": v1beta1.JSONSchemaProps{
+													Type: "string",
+												},
+												"version": v1beta1.JSONSchemaProps{
+													Type: "string",
+												},
+											},
+										},
+									},
 								},
 								"pullpolicy": v1beta1.JSONSchemaProps{
 									Type: "string",

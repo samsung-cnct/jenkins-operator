@@ -26,6 +26,12 @@ import (
 // as a go struct.
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+type PluginSpec struct {
+	// plugin Id
+	Id string `json:"id,omitempty"`
+	// plugin version string
+	Version string `json:"version,omitempty"`
+}
 
 // JenkinsInstanceSpec defines the desired state of JenkinsInstance
 type JenkinsInstanceSpec struct {
@@ -42,6 +48,9 @@ type JenkinsInstanceSpec struct {
 	// Dictionary of environment variable values
 	Env map[string]string `json:"env,omitempty"`
 
+	// Array of plugin configurations
+	Plugins []PluginSpec `json:"plugins,omitempty"`
+
 	// Jenkins master port
 	MasterPort int32 `json:"masterport,omitempty"`
 
@@ -54,7 +63,7 @@ type JenkinsInstanceSpec struct {
 	AdminSecret string `json:"adminsecret,omitempty"`
 
 	// Groovy configuration scripts
-	Config []string `json:"config,omitempty"`
+	Config string `json:"config,omitempty"`
 
 	// Number of replicas
 	Replicas *int32 `json:"replicas,omitempty"`

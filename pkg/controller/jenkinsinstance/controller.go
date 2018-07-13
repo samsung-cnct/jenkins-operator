@@ -48,6 +48,7 @@ import (
 	"net/http"
 	goerr "errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"strings"
 )
 
 // EDIT THIS FILE
@@ -340,7 +341,6 @@ func (bc *JenkinsInstanceController) updateJenkinsInstanceStatus(jenkinsInstance
 	}
 
 	setupSecretCopy := setupSecret.DeepCopy()
-	setupSecretCopy.Data["user"] = adminSecret.Data["user"]
 	setupSecretCopy.Data["apiToken"] = []byte(apiToken)
 	_, err = bc.KubernetesClientSet.CoreV1().Secrets(jenkinsInstance.Namespace).Update(setupSecretCopy)
 	if err != nil {
@@ -377,7 +377,7 @@ func newSetupSecret(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, adminSecre
 		"component": string(jenkinsInstance.UID),
 	}
 
-	adminUserConfig, err := bindata.Asset("init-groovy/jenkins_security.groovy")
+	adminUserConfig, err := bindata.Asset("init-groovy/0-jenkins-config.groovy")
 	if err != nil {
 		glog.Errorf("Error locating binary asset: %s", err)
 		return nil
@@ -409,6 +409,14 @@ func newSetupSecret(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, adminSecre
 		Executors: jenkinsInstance.Spec.Executors,
 	}
 
+	// parse the plugin array
+	plugins := jenkinsInstance.Spec.Plugins
+	var pluginList []string
+	for _, plugin := range plugins {
+		pluginInfo := fmt.Sprintf("%s:%s", plugin.Id, plugin.Version)
+		pluginList = append(pluginList, pluginInfo)
+	}
+
 	// parse the groovy config template
 	configTemplate, err := template.New("jenkins-config").Parse(string(adminUserConfig[:]))
 	if err != nil {
@@ -422,7 +430,13 @@ func newSetupSecret(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, adminSecre
 		return nil
 	}
 
-	authContents := fmt.Sprintf("%s:%s", adminUser, adminPassword)
+	// add things to the string data
+	stringData := map[string]string{
+		"0-jenkins-config.groovy": jenkinsConfigParsed.String(),
+		"1-user-config.groovy": jenkinsInstance.Spec.Config,
+		"plugins.txt": strings.Join(pluginList, "\n"),
+		"user": adminUser,
+	}
 
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -437,12 +451,7 @@ func newSetupSecret(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, adminSecre
 				}),
 			},
 		},
-
-		StringData: map[string]string{
-			"jenkins_security.groovy": jenkinsConfigParsed.String(),
-			"cliAuth": authContents,
-		},
-
+		StringData: stringData,
 		Type: corev1.SecretTypeOpaque,
 	}
 }
@@ -548,6 +557,11 @@ func newDeployment(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *appsv1.Dep
 		})
 	}
 
+	commandString := ""
+	commandString += "/usr/local/bin/install-plugins.sh $(cat /var/jenkins_home/init.groovy.d/plugins.txt | tr '\\n' ' ') && "
+	commandString += "/sbin/tini -- /usr/local/bin/jenkins.sh"
+	commandString += ""
+
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jenkinsInstance.Spec.Name,
@@ -589,17 +603,17 @@ func newDeployment(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *appsv1.Dep
 								},
 							},
 							Env: env,
+							Command: []string {
+								"bash",
+								"-c",
+								commandString,
+							},
 							ImagePullPolicy: jenkinsInstance.Spec.PullPolicy,
 							VolumeMounts: []corev1.VolumeMount{
 								{
-									Name: "init-groovy-d",
-									ReadOnly: true,
+									Name:      "init-groovy-d",
+									ReadOnly:  true,
 									MountPath: "/var/jenkins_home/init.groovy.d",
-								},
-								{
-									Name: "cli-auth",
-									ReadOnly: true,
-									MountPath: "/var/jenkins_home/cli-auth",
 								},
 							},
 						},
@@ -611,26 +625,6 @@ func newDeployment(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *appsv1.Dep
 							VolumeSource: corev1.VolumeSource{
 								Secret: &corev1.SecretVolumeSource {
 									SecretName: jenkinsInstance.Spec.Name,
-									Items: []corev1.KeyToPath{
-										{
-											Key: "jenkins_security.groovy",
-											Path: "jenkins_security.groovy",
-										},
-									},
-								},
-							},
-						},
-						{
-							Name: "cli-auth",
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource {
-									SecretName: jenkinsInstance.Spec.Name,
-									Items: []corev1.KeyToPath{
-										{
-											Key: "cliAuth",
-											Path: "cliAuth",
-										},
-									},
 								},
 							},
 						},
