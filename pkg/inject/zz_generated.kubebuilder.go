@@ -20,6 +20,7 @@ import (
 	jenkinsv1alpha1 "github.com/maratoid/jenkins-operator/pkg/apis/jenkins/v1alpha1"
 	rscheme "github.com/maratoid/jenkins-operator/pkg/client/clientset/versioned/scheme"
 	"github.com/maratoid/jenkins-operator/pkg/controller/jenkinsinstance"
+	"github.com/maratoid/jenkins-operator/pkg/controller/jenkinsjob"
 	"github.com/maratoid/jenkins-operator/pkg/controller/jenkinsplugin"
 	"github.com/maratoid/jenkins-operator/pkg/inject/args"
 	appsv1 "k8s.io/api/apps/v1"
@@ -38,6 +39,9 @@ func init() {
 		Injector.ControllerManager = arguments.ControllerManager
 
 		if err := arguments.ControllerManager.AddInformerProvider(&jenkinsv1alpha1.JenkinsInstance{}, arguments.Informers.Jenkins().V1alpha1().JenkinsInstances()); err != nil {
+			return err
+		}
+		if err := arguments.ControllerManager.AddInformerProvider(&jenkinsv1alpha1.JenkinsJob{}, arguments.Informers.Jenkins().V1alpha1().JenkinsJobs()); err != nil {
 			return err
 		}
 		if err := arguments.ControllerManager.AddInformerProvider(&jenkinsv1alpha1.JenkinsPlugin{}, arguments.Informers.Jenkins().V1alpha1().JenkinsPlugins()); err != nil {
@@ -63,6 +67,11 @@ func init() {
 		} else {
 			arguments.ControllerManager.AddController(c)
 		}
+		if c, err := jenkinsjob.ProvideController(arguments); err != nil {
+			return err
+		} else {
+			arguments.ControllerManager.AddController(c)
+		}
 		if c, err := jenkinsplugin.ProvideController(arguments); err != nil {
 			return err
 		} else {
@@ -73,23 +82,13 @@ func init() {
 
 	// Inject CRDs
 	Injector.CRDs = append(Injector.CRDs, &jenkinsv1alpha1.JenkinsInstanceCRD)
+	Injector.CRDs = append(Injector.CRDs, &jenkinsv1alpha1.JenkinsJobCRD)
 	Injector.CRDs = append(Injector.CRDs, &jenkinsv1alpha1.JenkinsPluginCRD)
 	// Inject PolicyRules
 	Injector.PolicyRules = append(Injector.PolicyRules, rbacv1.PolicyRule{
 		APIGroups: []string{"jenkins.jenkinsoperator.maratoid.github.com"},
 		Resources: []string{"*"},
 		Verbs:     []string{"*"},
-	})
-	Injector.PolicyRules = append(Injector.PolicyRules, rbacv1.PolicyRule{
-		APIGroups: []string{
-			"apps",
-		},
-		Resources: []string{
-			"deployments",
-		},
-		Verbs: []string{
-			"get", "list", "watch",
-		},
 	})
 	Injector.PolicyRules = append(Injector.PolicyRules, rbacv1.PolicyRule{
 		APIGroups: []string{
@@ -119,6 +118,17 @@ func init() {
 		},
 		Resources: []string{
 			"jobs",
+		},
+		Verbs: []string{
+			"get", "list", "watch",
+		},
+	})
+	Injector.PolicyRules = append(Injector.PolicyRules, rbacv1.PolicyRule{
+		APIGroups: []string{
+			"apps",
+		},
+		Resources: []string{
+			"deployments",
 		},
 		Verbs: []string{
 			"get", "list", "watch",

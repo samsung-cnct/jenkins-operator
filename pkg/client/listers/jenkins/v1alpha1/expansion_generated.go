@@ -26,6 +26,14 @@ type JenkinsInstanceListerExpansion interface{}
 // JenkinsInstanceNamespaceLister.
 type JenkinsInstanceNamespaceListerExpansion interface{}
 
+// JenkinsJobListerExpansion allows custom methods to be added to
+// JenkinsJobLister.
+type JenkinsJobListerExpansion interface{}
+
+// JenkinsJobNamespaceListerExpansion allows custom methods to be added to
+// JenkinsJobNamespaceLister.
+type JenkinsJobNamespaceListerExpansion interface{}
+
 // JenkinsPluginListerExpansion allows custom methods to be added to
 // JenkinsPluginLister.
 type JenkinsPluginListerExpansion interface{}

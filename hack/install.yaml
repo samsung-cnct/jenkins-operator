@@ -108,9 +108,7 @@ spec:
               format: int32
               type: integer
             config:
-              items:
-                type: string
-              type: array
+              type: string
             env:
               type: object
             executors:
@@ -119,6 +117,8 @@ spec:
             image:
               pattern: .+:.+
               type: string
+            jobspvc:
+              type: string
             location:
               type: string
             masterport:
@@ -126,6 +126,15 @@ spec:
               type: integer
             name:
               type: string
+            plugins:
+              items:
+                properties:
+                  id:
+                    type: string
+                  version:
+                    type: string
+                type: object
+              type: array
             pullpolicy:
               type: string
             replicas:
@@ -144,6 +153,41 @@ spec:
               type: string
           required:
           - phase
+          type: object
+      type: object
+  version: v1alpha1
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: null
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  creationTimestamp: null
+  labels:
+    api: jenkins-operator
+    kubebuilder.k8s.io: 0.1.12
+  name: jenkinsjobs.jenkins.jenkinsoperator.maratoid.github.com
+spec:
+  group: jenkins.jenkinsoperator.maratoid.github.com
+  names:
+    kind: JenkinsJob
+    plural: jenkinsjobs
+  scope: Namespaced
+  validation:
+    openAPIV3Schema:
+      properties:
+        apiVersion:
+          type: string
+        kind:
+          type: string
+        metadata:
+          type: object
+        spec:
+          type: object
+        status:
           type: object
       type: object
   version: v1alpha1
