@@ -17,25 +17,3 @@ spec:
   jobspvc: jenkins-test
   location: https://jenkins.example.com
   adminemail: admin@example.com
-  plugins:
-    - id: credentials
-      version: 2.1.17
-  config: |
-    import jenkins.*
-    import hudson.*
-    import hudson.model.*
-    import jenkins.model.*
-    import com.cloudbees.plugins.credentials.impl.*;
-    import com.cloudbees.plugins.credentials.*;
-    import com.cloudbees.plugins.credentials.domains.*;
-
-    Credentials githubScanCreds = (Credentials) new UsernamePasswordCredentialsImpl(
-      CredentialsScope.GLOBAL,
-      "github-access",
-      "github-access",
-      "githubuser",
-      "githubpassword")
-
-    SystemCredentialsProvider.getInstance().getStore().addCredentials(
-      Domain.global(),
-      githubScanCreds)

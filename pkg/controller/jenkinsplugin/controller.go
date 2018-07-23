@@ -230,9 +230,7 @@ func ProvideController(arguments args.InjectArgs) (*controller.GenericController
 		return gc, err
 	}
 
-	// Set up an event handler for when JenkinsInstance resources change. This
-	// handler will lookup the the given JenkinsInstance
-	// owned by a JenkinsPlugin resource will enqueue that JenkinsInstance resource for
+	// Set up an event handler for when JenkinsInstance resources change.
 	if err := gc.WatchControllerOf(&jenkinsv1alpha1.JenkinsInstance{}, eventhandlers.Path{bc.LookupJenkinsInstance},
 		predicates.ResourceVersionChanged); err != nil {
 		return gc, err
@@ -254,13 +252,18 @@ func ProvideController(arguments args.InjectArgs) (*controller.GenericController
 }
 
 // LookupJenkinsPlugin looks up a JenkinsPlugin from the lister
-func (c JenkinsPluginController) LookupJenkinsPlugin(r types.ReconcileKey) (interface{}, error) {
-	return c.Informers.Jenkins().V1alpha1().JenkinsPlugins().Lister().JenkinsPlugins(r.Namespace).Get(r.Name)
+func (bc JenkinsPluginController) LookupJenkinsPlugin(r types.ReconcileKey) (interface{}, error) {
+	return bc.Informers.Jenkins().V1alpha1().JenkinsPlugins().Lister().JenkinsPlugins(r.Namespace).Get(r.Name)
 }
 
 // LookupJenkinsInstance looks up a JenkinsInstance from the lister
-func (c JenkinsPluginController) LookupJenkinsInstance(r types.ReconcileKey) (interface{}, error) {
-	return c.Informers.Jenkins().V1alpha1().JenkinsInstances().Lister().JenkinsInstances(r.Namespace).Get(r.Name)
+func (bc JenkinsPluginController) LookupJenkinsInstance(r types.ReconcileKey) (interface{}, error) {
+	jenkinsPlugin, err := bc.LookupJenkinsPlugin(r)
+	if err != nil {
+		return nil, err
+	}
+
+	return bc.Informers.Jenkins().V1alpha1().JenkinsInstances().Lister().JenkinsInstances(r.Namespace).Get(jenkinsPlugin.(*jenkinsv1alpha1.JenkinsPlugin).Spec.JenkinsInstance)
 }
 
 func newPluginJob(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, jenkinsPlugin *jenkinsv1alpha1.JenkinsPlugin, setupSecret *corev1.Secret) *batchv1.Job {

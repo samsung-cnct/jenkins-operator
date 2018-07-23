@@ -424,6 +424,12 @@
   version = "v0.9.1"
 
 [[projects]]
+  name = "gopkg.in/matryer/try.v1"
+  packages = ["."]
+  revision = "312d2599e12e89ca89b52a09597394f449235d80"
+  version = "v1"
+
+[[projects]]
   name = "gopkg.in/yaml.v2"
   packages = ["."]
   revision = "5420a8b6744d3b0345ab293f6fcba19c978f1183"
@@ -682,6 +688,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "df6d57643e3663f403d63ac0202b9ffe74e75781cbb805be3cb805ba02e548f8"
+  inputs-digest = "aa6f893b251819d92c2335c99368ad01d995e79caa60e8ea36935a756656bd05"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -27,8 +27,14 @@ import (
 
 // JenkinsJobSpec defines the desired state of JenkinsJob
 type JenkinsJobSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "kubebuilder generate" to regenerate code after modifying this file
+	// ID of the JenkinsServer instance to install this plugin in
+	JenkinsInstance string `json:"jenkinsinstance,omitempty"`
+
+	// Content of a jenkins job in form of Jenkins XML
+	JobXml string `json:"jobxml,omitempty"`
+
+	// Content of a jenkins job in form of Jenkins JobDSL
+	JobDsl string `json:"jobdsl,omitempty"`
 }
 
 // JenkinsJobStatus defines the observed state of JenkinsJob

@@ -48,7 +48,10 @@ import (
 	"net/http"
 	goerr "errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"gopkg.in/matryer/try.v1"
 	"strings"
+	"bufio"
+	"time"
 )
 
 // EDIT THIS FILE
@@ -333,8 +336,20 @@ func (bc *JenkinsInstanceController) updateJenkinsInstanceStatus(jenkinsInstance
 	// Or create a copy manually for better performance
 	jenkinsInstanceCopy := jenkinsInstance.DeepCopy()
 
-	// use admin secret data to get the user configuration page and parse out an api token
-	apiToken, err := getJenkinsApiToken(jenkinsInstance, service, adminSecret)
+	var apiToken string
+	err := try.Do(func(attempt int) (bool, error) {
+
+		// use admin secret data to get the user configuration page and parse out an api token
+		var err error
+		apiToken, err = getJenkinsApiToken(jenkinsInstance, service, adminSecret)
+		if err != nil {
+			glog.Errorf("Error: %v, retrying", err)
+			time.Sleep(10 * time.Second) // wait 10 seconds
+		}
+
+		return attempt < 5, err
+	})
+
 	if err != nil {
 		glog.Errorf("Error: %v", err)
 		return err
@@ -410,12 +425,27 @@ func newSetupSecret(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, adminSecre
 	}
 
 	// parse the plugin array
+	requiredPlugin, err := bindata.Asset("environment/required-plugins")
+	if err != nil {
+		glog.Errorf("Error locating binary asset: %s", err)
+		return nil
+	}
 	plugins := jenkinsInstance.Spec.Plugins
 	var pluginList []string
+
+	// add required plugins first
+	scanner := bufio.NewScanner(strings.NewReader(string(requiredPlugin[:])))
+	for scanner.Scan() {
+		pluginList = append(pluginList, scanner.Text())
+	}
+
+	// add user plugins next
 	for _, plugin := range plugins {
 		pluginInfo := fmt.Sprintf("%s:%s", plugin.Id, plugin.Version)
 		pluginList = append(pluginList, pluginInfo)
 	}
+
+	// TODO: remove duplicate plugin ids
 
 	// parse the groovy config template
 	configTemplate, err := template.New("jenkins-config").Parse(string(adminUserConfig[:]))
@@ -430,11 +460,19 @@ func newSetupSecret(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, adminSecre
 		return nil
 	}
 
+	// load seed job dsl from bindata
+	seedDsl, err := bindata.Asset("jobdsl/seed-job-dsl")
+	if err != nil {
+		glog.Errorf("Error locating binary asset: %s", err)
+		return nil
+	}
+
 	// add things to the string data
 	stringData := map[string]string{
 		"0-jenkins-config.groovy": jenkinsConfigParsed.String(),
 		"1-user-config.groovy": jenkinsInstance.Spec.Config,
 		"plugins.txt": strings.Join(pluginList, "\n"),
+		"seed-job-dsl": string(seedDsl[:]),
 		"user": adminUser,
 	}
 
@@ -520,38 +558,26 @@ func newDeployment(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *appsv1.Dep
 	}
 
 	// get binary data for variables and groovy config
-	javaOptsName, err := bindata.Asset("java_opts")
-	if err != nil {
-		glog.Errorf("Error locating binary asset: %s", err)
-		return nil
-	}
-	javaOptsVal, err := bindata.Asset("java_opts.values")
-	if err != nil {
-		glog.Errorf("Error locating binary asset: %s", err)
-		return nil
-	}
-
-	jenkinsOptsName, err := bindata.Asset("jenkins_opts")
-	if err != nil {
-		glog.Errorf("Error locating binary asset: %s", err)
-		return nil
-	}
-	jenkinsOptsVal, err := bindata.Asset("jenkins_opts.values")
+	jenkinsJvmEnv, err := bindata.Asset("environment/jenkins-jvm-environment")
 	if err != nil {
 		glog.Errorf("Error locating binary asset: %s", err)
 		return nil
 	}
 
 	// Create environment variables
+	// variables out of jenkins-jvm-environment
 	var env []corev1.EnvVar
-	env = append(env, corev1.EnvVar{
-		Name:      string(javaOptsName[:]),
-		Value:     string(javaOptsVal[:]),
-	})
-	env = append(env, corev1.EnvVar{
-		Name:      string(jenkinsOptsName[:]),
-		Value:     string(jenkinsOptsVal[:]),
-	})
+	scanner := bufio.NewScanner(strings.NewReader(string(jenkinsJvmEnv[:])))
+	for scanner.Scan() {
+
+		envComponents := strings.Split(scanner.Text(), ":")
+		env = append(env, corev1.EnvVar{
+			Name:      envComponents[0],
+			Value:     envComponents[1],
+		})
+	}
+
+	// user-specified environment variables
 	for envVar, envVarVal := range jenkinsInstance.Spec.Env {
 		env = append(env, corev1.EnvVar{
 			Name:      envVar,
@@ -665,7 +691,7 @@ func newDeployment(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) *appsv1.Dep
 
 func getJenkinsApiToken(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, service *corev1.Service, adminSecret *corev1.Secret) (string, error) {
 
-	serviceUrl, err := util.GetServiceEndpoint(service, "me/configure", 8080)
+	serviceUrl, err := util.GetServiceEndpoint(service, "me/configure", jenkinsInstance.Spec.MasterPort)
 	if err != nil {
 		return "", err
 	}

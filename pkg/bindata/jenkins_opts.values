@@ -1,1 +1,0 @@
---argumentsRealm.passwd.$(ADMIN_USER)=$(ADMIN_PASSWORD) --argumentsRealm.roles.$(ADMIN_USER)=$(ADMIN_USER)

@@ -1,1 +1,0 @@
--Xms1024m -Xmx1024m -Djenkins.install.runSetupWizard=false -Djenkins.CLI.disabled=true

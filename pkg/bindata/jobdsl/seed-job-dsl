@@ -1,0 +1,21 @@
+freeStyleJob('create-jenkins-jobs') {
+    blockOn('*') {
+        blockLevel('GLOBAL')
+        scanQueueFor('ALL')
+    }
+
+    description('JobDSL job, that creates other jobs')
+    displayName('Create new jobs')
+
+    parameters {
+        textParam('JOBDSL', '', 'JobDsl plugin dsl text')
+    }
+
+
+    steps {
+        shell('echo ${JOBDSL} > job.dsl')
+        dsl {
+            external('job.dsl')
+        }
+    }
+}

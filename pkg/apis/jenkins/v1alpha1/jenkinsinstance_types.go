@@ -24,7 +24,7 @@ import (
 // EDIT THIS FILE!
 // Created by "kubebuilder create resource" for you to implement the JenkinsInstance resource schema definition
 // as a go struct.
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+// NOTE: json tags are required.  Any new fields you add must have json tags fo\r the fields to be serialized.
 
 type PluginSpec struct {
 	// plugin Id
