@@ -37,6 +37,11 @@ import (
 	"github.com/kubernetes-sigs/kubebuilder/pkg/controller/eventhandlers"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/controller/predicates"
 	"time"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"bytes"
+	"net/url"
+	"text/template"
+	"github.com/maratoid/jenkins-operator/pkg/bindata"
 )
 
 // EDIT THIS FILE
@@ -44,18 +49,23 @@ import (
 // Controller implementation logic for JenkinsJob resources goes here.
 
 const (
-	// SuccessSynced is used as part of the Event 'reason' when a JenkinsInstance is synced
+	// SuccessSynced is used as part of the Event 'reason' when a JenkinsJob is synced
 	SuccessSynced = "Synced"
-	// ErrResourceExists is used as part of the Event 'reason' when a JenkinsInstance fails
+	// SuccessSynced is used as part of the Event 'reason' when a JenkinsJob is synced
+	ErrSynced = "Failed"
+	// ErrResourceExists is used as part of the Event 'reason' when a JenkinsJob fails
 	// to sync due to a resource of the same name already existing.
 	ErrResourceExists = "ErrResourceExists"
 
 	// MessageResourceExists is the message used for Events when a resource
 	// fails to sync due to a resource already existing
 	MessageResourceExists = "Resource %q already exists and is not managed by JenkinsJob"
-	// MessageResourceSynced is the message used for an Event fired when a JenkinsInstance
+	// MessageResourceSynced is the message used for an Event fired when a JenkinsJob
 	// is synced successfully
 	MessageResourceSynced = "JenkinsJob synced successfully"
+	// MessageResourceSynced is the message used for an Event fired when a JenkinsJob
+	// is synced successfully
+	ErrMessageResourceFailed = "JenkinsJob failed to run"
 )
 
 func (bc *JenkinsJobController) Reconcile(key types.ReconcileKey) error {
@@ -147,13 +157,26 @@ func (bc *JenkinsJobController) Reconcile(key types.ReconcileKey) error {
 	}
 
 	// TODO Update the Job iff its observed Spec does
-	// TODO: updte status
+	// TODO: update status
 
 
+	// TODO: this is a bad place for a wait
 	// wait for job
 	timeout := 0
+	syncType := corev1.EventTypeWarning
+	syncResult := ErrSynced
+	syncResultMsg := ErrMessageResourceFailed
 	for timeout < 2000 {
+		job, err = bc.KubernetesInformers.Batch().V1().Jobs().Lister().Jobs(jenkinsJob.Namespace).Get(jenkinsJob.Name)
+		if err != nil {
+			glog.Errorf("Error getting job: %s", err)
+			break
+		}
+
 		if job.Status.Succeeded > 0 {
+			syncType = corev1.EventTypeNormal
+			syncResult = SuccessSynced
+			syncResultMsg = MessageResourceSynced
 			break
 		}
 
@@ -161,7 +184,7 @@ func (bc *JenkinsJobController) Reconcile(key types.ReconcileKey) error {
 		timeout++
 	}
 
-	bc.jenkinsjobrecorder.Event(jenkinsJob, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
+	bc.jenkinsjobrecorder.Event(jenkinsJob, syncType, syncResult, syncResultMsg)
 
 	return nil
 }
@@ -250,5 +273,107 @@ func (bc JenkinsJobController) LookupJenkinsInstance(r types.ReconcileKey) (inte
 }
 
 func newJobJob(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, jenkinsJob *jenkinsv1alpha1.JenkinsJob, setupSecret *corev1.Secret) *batchv1.Job {
-	return nil
+	labels := map[string]string{
+		"app":        "jenkinsci",
+		"controller": jenkinsJob.Name,
+		"component": string(jenkinsJob.UID),
+	}
+
+	jenkinsJobXml := jenkinsJob.Spec.JobXml
+	jenkinsJobDsl := jenkinsJob.Spec.JobDsl
+
+	apiUrl, err := url.Parse(jenkinsInstance.Status.Api)
+	if err != nil {
+		glog.Errorf("Failed to parse url %s", jenkinsInstance.Status.Api)
+		return nil
+	}
+
+	apiUrl.User = url.UserPassword(string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
+
+	type JobInfo struct {
+		Api 			string
+		JobName			string
+		JobXml			string
+		JobDsl          string
+	}
+
+	jobInfo := JobInfo{
+		Api: apiUrl.String(),
+		JobName: jenkinsJob.Name,
+		JobXml: jenkinsJobXml,
+		JobDsl: jenkinsJobDsl,
+	}
+
+	// load the correct template (xml or dsl)
+	var jobConfig []byte
+	if jenkinsJobXml != "" {
+		jobConfig, err = bindata.Asset("job-scripts/install-xml-job.sh")
+		if err != nil {
+			glog.Errorf("Error locating binary asset: %s", err)
+			return nil
+		}
+	} else if jenkinsJobDsl != "" {
+		jobConfig, err = bindata.Asset("job-scripts/install-dsl-job.sh")
+		if err != nil {
+			glog.Errorf("Error locating binary asset: %s", err)
+			return nil
+		}
+	}
+
+	// parse the config template
+	configTemplate, err := template.New("jenkins-job").Parse(string(jobConfig[:]))
+	if err != nil {
+		glog.Errorf("Failed to parse plugin config template: %s", err)
+		return nil
+	}
+
+	var jobConfigParsed bytes.Buffer
+	if err := configTemplate.Execute(&jobConfigParsed, jobInfo); err != nil {
+		glog.Errorf("Failed to execute plugin config template: %s", err)
+		return nil
+	}
+
+	var env []corev1.EnvVar
+	env = append(env, corev1.EnvVar{
+		Name:      "INSTALL_JOB",
+		Value:     jobConfigParsed.String(),
+	})
+
+	var backoffLimit int32 = 3
+	return &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: jenkinsJob.Name,
+			Namespace: jenkinsJob.Namespace,
+			Labels: labels,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(jenkinsJob, schema.GroupVersionKind{
+					Group:   jenkinsv1alpha1.SchemeGroupVersion.Group,
+					Version: jenkinsv1alpha1.SchemeGroupVersion.Version,
+					Kind:    "JenkinsJob",
+				}),
+			},
+		},
+
+		Spec: batchv1.JobSpec{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:            jenkinsJob.Name,
+							Image:           "java:latest",
+							ImagePullPolicy: "IfNotPresent",
+							Command: []string{
+								"bash",
+								"-c",
+								"eval \"$INSTALL_JOB\"",
+							},
+							Env: env,
+						},
+					},
+					RestartPolicy:      corev1.RestartPolicyOnFailure,
+				},
+			},
+			BackoffLimit: &backoffLimit,
+		},
+	}
 }

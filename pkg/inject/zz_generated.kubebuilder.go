@@ -92,6 +92,17 @@ func init() {
 	})
 	Injector.PolicyRules = append(Injector.PolicyRules, rbacv1.PolicyRule{
 		APIGroups: []string{
+			"apps",
+		},
+		Resources: []string{
+			"deployments",
+		},
+		Verbs: []string{
+			"get", "list", "watch",
+		},
+	})
+	Injector.PolicyRules = append(Injector.PolicyRules, rbacv1.PolicyRule{
+		APIGroups: []string{
 			"",
 		},
 		Resources: []string{
@@ -118,17 +129,6 @@ func init() {
 		},
 		Resources: []string{
 			"jobs",
-		},
-		Verbs: []string{
-			"get", "list", "watch",
-		},
-	})
-	Injector.PolicyRules = append(Injector.PolicyRules, rbacv1.PolicyRule{
-		APIGroups: []string{
-			"apps",
-		},
-		Resources: []string{
-			"deployments",
 		},
 		Verbs: []string{
 			"get", "list", "watch",

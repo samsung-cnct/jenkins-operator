@@ -1,6 +1,0 @@
-apiVersion: jenkins.jenkinsoperator.maratoid.github.com/v1alpha1
-kind: JenkinsJob
-metadata:
-  name: jenkinsjob-example
-spec:
-  foo: bar

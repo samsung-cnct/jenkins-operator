@@ -8,12 +8,11 @@ freeStyleJob('create-jenkins-jobs') {
     displayName('Create new jobs')
 
     parameters {
-        textParam('JOBDSL', '', 'JobDsl plugin dsl text')
+        fileParam('job.dsl', 'JobDSL file')
     }
 
 
     steps {
-        shell('echo ${JOBDSL} > job.dsl')
         dsl {
             external('job.dsl')
         }
