@@ -24,8 +24,14 @@ import (
 // EDIT THIS FILE!
 // Created by "kubebuilder create resource" for you to implement the JenkinsInstance resource schema definition
 // as a go struct.
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+// NOTE: json tags are required.  Any new fields you add must have json tags fo\r the fields to be serialized.
 
+type PluginSpec struct {
+	// plugin Id
+	Id string `json:"id,omitempty"`
+	// plugin version string
+	Version string `json:"version,omitempty"`
+}
 
 // JenkinsInstanceSpec defines the desired state of JenkinsInstance
 type JenkinsInstanceSpec struct {
@@ -42,6 +48,9 @@ type JenkinsInstanceSpec struct {
 	// Dictionary of environment variable values
 	Env map[string]string `json:"env,omitempty"`
 
+	// Array of plugin configurations
+	Plugins []PluginSpec `json:"plugins,omitempty"`
+
 	// Jenkins master port
 	MasterPort int32 `json:"masterport,omitempty"`
 
@@ -51,8 +60,10 @@ type JenkinsInstanceSpec struct {
 	// How many executors
 	Executors int32 `json:"executors,omitempty"`
 
+	AdminSecret string `json:"adminsecret,omitempty"`
+
 	// Groovy configuration scripts
-	Config []string `json:"config,omitempty"`
+	Config string `json:"config,omitempty"`
 
 	// Number of replicas
 	Replicas *int32 `json:"replicas,omitempty"`
@@ -62,6 +73,15 @@ type JenkinsInstanceSpec struct {
 
 	// Jenkins instance service type
 	ServiceType corev1.ServiceType `json:"servicetype,omitempty"`
+
+	// Jenkins location
+	Location string `json:"location,omitempty"`
+
+	// Jenkins admin email
+	AdminEmail string `json:"adminemail,omitempty"`
+
+	// Name of pre-existing PVC for jobs
+	JobsPvc string `json:"jobspvc,omitempty"`
 }
 
 // JenkinsInstanceStatus defines the observed state of JenkinsInstance
@@ -70,10 +90,13 @@ type JenkinsInstanceStatus struct {
 	// Important: Run "kubebuilder generate" to regenerate code after modifying this file
 
 	// full url to newly created jenkins remote API endpoint
-	 Api string `json:"api,omitempty"`
+	Api string `json:"api,omitempty"`
 
-	 // state if jenkins server instance
-	 Phase string `json:"phase"`
+	// api token
+	SetupSecret string `json:"adminsecret,omitempty"`
+
+	// state if jenkins server instance
+	Phase string `json:"phase"`
 }
 
 // +genclient

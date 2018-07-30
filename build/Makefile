@@ -35,13 +35,17 @@ OPERATOR_SOURCE_FILE=cmd/controller-manager/main.go
 BUILD_OPERATOR_BINARY_CMD=${GOBUILD} -a -tags netgo -ldflags ${LDFLAGS} -o ${OPERATOR_BINARY_NAME} ${OPERATOR_SOURCE_FILE}
 
 # By default we will most likely want to build a linux build of the application
-all: kube-builder jenkins-operator-linux-amd64
-linux: kube-builder jenkins-operator-linux-amd64
-darwin: kube-builder jenkins-operator-darwin-amd64
-container: kube-builder jenkins-operator-docker
+all: bin-data kube-builder jenkins-operator-linux-amd64
+linux: bin-data kube-builder jenkins-operator-linux-amd64
+darwin: bin-data kube-builder jenkins-operator-darwin-amd64
+container: bin-data kube-builder jenkins-operator-docker
 
 # Clean will clean up dep and remove any binaries
 clean: remove-binary
+
+# generate bindata
+bin-data:
+	go-bindata -o $(PROJECTDIR)/pkg/bindata/data.go -ignore data\\.go -pkg bindata -prefix $(PROJECTDIR)/pkg/bindata $(PROJECTDIR)/pkg/bindata/...
 
 # Generate kube builder code
 kube-builder:
@@ -50,6 +54,7 @@ kube-builder:
 # Install dep will install dep in $GOROOT/bin
 install-dep:
 	go get -u github.com/golang/dep/cmd/dep
+	go get -u github.com/go-bindata/go-bindata/...
 
 # New Dep will just blow away Gopkg, vendor and do a dep init
 new-dep:

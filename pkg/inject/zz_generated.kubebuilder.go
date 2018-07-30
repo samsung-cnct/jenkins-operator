@@ -20,9 +20,11 @@ import (
 	jenkinsv1alpha1 "github.com/maratoid/jenkins-operator/pkg/apis/jenkins/v1alpha1"
 	rscheme "github.com/maratoid/jenkins-operator/pkg/client/clientset/versioned/scheme"
 	"github.com/maratoid/jenkins-operator/pkg/controller/jenkinsinstance"
+	"github.com/maratoid/jenkins-operator/pkg/controller/jenkinsjob"
 	"github.com/maratoid/jenkins-operator/pkg/controller/jenkinsplugin"
 	"github.com/maratoid/jenkins-operator/pkg/inject/args"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -39,19 +41,33 @@ func init() {
 		if err := arguments.ControllerManager.AddInformerProvider(&jenkinsv1alpha1.JenkinsInstance{}, arguments.Informers.Jenkins().V1alpha1().JenkinsInstances()); err != nil {
 			return err
 		}
+		if err := arguments.ControllerManager.AddInformerProvider(&jenkinsv1alpha1.JenkinsJob{}, arguments.Informers.Jenkins().V1alpha1().JenkinsJobs()); err != nil {
+			return err
+		}
 		if err := arguments.ControllerManager.AddInformerProvider(&jenkinsv1alpha1.JenkinsPlugin{}, arguments.Informers.Jenkins().V1alpha1().JenkinsPlugins()); err != nil {
 			return err
 		}
 
 		// Add Kubernetes informers
+		if err := arguments.ControllerManager.AddInformerProvider(&appsv1.Deployment{}, arguments.KubernetesInformers.Apps().V1().Deployments()); err != nil {
+			return err
+		}
 		if err := arguments.ControllerManager.AddInformerProvider(&corev1.Service{}, arguments.KubernetesInformers.Core().V1().Services()); err != nil {
 			return err
 		}
-		if err := arguments.ControllerManager.AddInformerProvider(&appsv1.Deployment{}, arguments.KubernetesInformers.Apps().V1().Deployments()); err != nil {
+		if err := arguments.ControllerManager.AddInformerProvider(&corev1.Secret{}, arguments.KubernetesInformers.Core().V1().Secrets()); err != nil {
+			return err
+		}
+		if err := arguments.ControllerManager.AddInformerProvider(&batchv1.Job{}, arguments.KubernetesInformers.Batch().V1().Jobs()); err != nil {
 			return err
 		}
 
 		if c, err := jenkinsinstance.ProvideController(arguments); err != nil {
+			return err
+		} else {
+			arguments.ControllerManager.AddController(c)
+		}
+		if c, err := jenkinsjob.ProvideController(arguments); err != nil {
 			return err
 		} else {
 			arguments.ControllerManager.AddController(c)
@@ -66,6 +82,7 @@ func init() {
 
 	// Inject CRDs
 	Injector.CRDs = append(Injector.CRDs, &jenkinsv1alpha1.JenkinsInstanceCRD)
+	Injector.CRDs = append(Injector.CRDs, &jenkinsv1alpha1.JenkinsJobCRD)
 	Injector.CRDs = append(Injector.CRDs, &jenkinsv1alpha1.JenkinsPluginCRD)
 	// Inject PolicyRules
 	Injector.PolicyRules = append(Injector.PolicyRules, rbacv1.PolicyRule{
@@ -90,6 +107,28 @@ func init() {
 		},
 		Resources: []string{
 			"services",
+		},
+		Verbs: []string{
+			"get", "list", "watch",
+		},
+	})
+	Injector.PolicyRules = append(Injector.PolicyRules, rbacv1.PolicyRule{
+		APIGroups: []string{
+			"",
+		},
+		Resources: []string{
+			"secrets",
+		},
+		Verbs: []string{
+			"get", "list", "watch",
+		},
+	})
+	Injector.PolicyRules = append(Injector.PolicyRules, rbacv1.PolicyRule{
+		APIGroups: []string{
+			"batch",
+		},
+		Resources: []string{
+			"jobs",
 		},
 		Verbs: []string{
 			"get", "list", "watch",

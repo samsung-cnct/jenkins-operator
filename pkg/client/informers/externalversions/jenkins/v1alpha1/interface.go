@@ -26,6 +26,8 @@ import (
 type Interface interface {
 	// JenkinsInstances returns a JenkinsInstanceInformer.
 	JenkinsInstances() JenkinsInstanceInformer
+	// JenkinsJobs returns a JenkinsJobInformer.
+	JenkinsJobs() JenkinsJobInformer
 	// JenkinsPlugins returns a JenkinsPluginInformer.
 	JenkinsPlugins() JenkinsPluginInformer
 }
@@ -44,6 +46,11 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 // JenkinsInstances returns a JenkinsInstanceInformer.
 func (v *version) JenkinsInstances() JenkinsInstanceInformer {
 	return &jenkinsInstanceInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// JenkinsJobs returns a JenkinsJobInformer.
+func (v *version) JenkinsJobs() JenkinsJobInformer {
+	return &jenkinsJobInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // JenkinsPlugins returns a JenkinsPluginInformer.

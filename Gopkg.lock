@@ -8,6 +8,12 @@
   version = "v0.21.0"
 
 [[projects]]
+  name = "github.com/PuerkitoBio/goquery"
+  packages = ["."]
+  revision = "dc2ec5c7ca4d9aae063b79b9f581dd3ea6afd2b2"
+  version = "v1.4.1"
+
+[[projects]]
   name = "github.com/PuerkitoBio/purell"
   packages = ["."]
   revision = "0bcb03f4b4d0a9428594752bd2a3b9aa0a9d4bd4"
@@ -17,6 +23,12 @@
   name = "github.com/PuerkitoBio/urlesc"
   packages = ["."]
   revision = "de5bf2ad457846296e2031421a34e2568e304e35"
+
+[[projects]]
+  name = "github.com/andybalholm/cascadia"
+  packages = ["."]
+  revision = "901648c87902174f774fac311d7f176f8647bdaa"
+  version = "v1.0.0"
 
 [[projects]]
   name = "github.com/davecgh/go-spew"
@@ -265,6 +277,12 @@
   version = "v1.2.0"
 
 [[projects]]
+  name = "github.com/sethgrid/pester"
+  packages = ["."]
+  revision = "03e26c9abbbf5accb8349790bf9f41bde09d72c3"
+  version = "1.0.0"
+
+[[projects]]
   name = "github.com/spf13/afero"
   packages = [
     ".",
@@ -404,6 +422,12 @@
   packages = ["."]
   revision = "d2d2541c53f18d2a059457998ce2876cc8e67cbf"
   version = "v0.9.1"
+
+[[projects]]
+  name = "gopkg.in/matryer/try.v1"
+  packages = ["."]
+  revision = "312d2599e12e89ca89b52a09597394f449235d80"
+  version = "v1"
 
 [[projects]]
   name = "gopkg.in/yaml.v2"
@@ -664,6 +688,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "33fe949514902c105782adef83b6da67105c6596efbefbc92bc146c29acf4ef9"
+  inputs-digest = "aa6f893b251819d92c2335c99368ad01d995e79caa60e8ea36935a756656bd05"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -28,6 +28,7 @@ import (
 type JenkinsV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	JenkinsInstancesGetter
+	JenkinsJobsGetter
 	JenkinsPluginsGetter
 }
 
@@ -38,6 +39,10 @@ type JenkinsV1alpha1Client struct {
 
 func (c *JenkinsV1alpha1Client) JenkinsInstances(namespace string) JenkinsInstanceInterface {
 	return newJenkinsInstances(c, namespace)
+}
+
+func (c *JenkinsV1alpha1Client) JenkinsJobs(namespace string) JenkinsJobInterface {
+	return newJenkinsJobs(c, namespace)
 }
 
 func (c *JenkinsV1alpha1Client) JenkinsPlugins(namespace string) JenkinsPluginInterface {

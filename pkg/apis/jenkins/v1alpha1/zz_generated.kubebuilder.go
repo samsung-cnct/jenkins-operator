@@ -45,6 +45,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
 		&JenkinsInstance{},
 		&JenkinsInstanceList{},
+		&JenkinsJob{},
+		&JenkinsJobList{},
 		&JenkinsPlugin{},
 		&JenkinsPluginList{},
 	)
@@ -58,6 +60,14 @@ type JenkinsInstanceList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []JenkinsInstance `json:"items"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type JenkinsJobList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []JenkinsJob `json:"items"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -107,17 +117,18 @@ var (
 						"spec": v1beta1.JSONSchemaProps{
 							Type: "object",
 							Properties: map[string]v1beta1.JSONSchemaProps{
+								"adminemail": v1beta1.JSONSchemaProps{
+									Type: "string",
+								},
+								"adminsecret": v1beta1.JSONSchemaProps{
+									Type: "string",
+								},
 								"agentport": v1beta1.JSONSchemaProps{
 									Type:   "integer",
 									Format: "int32",
 								},
 								"config": v1beta1.JSONSchemaProps{
-									Type: "array",
-									Items: &v1beta1.JSONSchemaPropsOrArray{
-										Schema: &v1beta1.JSONSchemaProps{
-											Type: "string",
-										},
-									},
+									Type: "string",
 								},
 								"env": v1beta1.JSONSchemaProps{
 									Type: "object",
@@ -130,12 +141,34 @@ var (
 									Pattern: ".+:.+",
 									Type:    "string",
 								},
+								"jobspvc": v1beta1.JSONSchemaProps{
+									Type: "string",
+								},
+								"location": v1beta1.JSONSchemaProps{
+									Type: "string",
+								},
 								"masterport": v1beta1.JSONSchemaProps{
 									Type:   "integer",
 									Format: "int32",
 								},
 								"name": v1beta1.JSONSchemaProps{
 									Type: "string",
+								},
+								"plugins": v1beta1.JSONSchemaProps{
+									Type: "array",
+									Items: &v1beta1.JSONSchemaPropsOrArray{
+										Schema: &v1beta1.JSONSchemaProps{
+											Type: "object",
+											Properties: map[string]v1beta1.JSONSchemaProps{
+												"id": v1beta1.JSONSchemaProps{
+													Type: "string",
+												},
+												"version": v1beta1.JSONSchemaProps{
+													Type: "string",
+												},
+											},
+										},
+									},
 								},
 								"pullpolicy": v1beta1.JSONSchemaProps{
 									Type: "string",
@@ -152,6 +185,9 @@ var (
 						"status": v1beta1.JSONSchemaProps{
 							Type: "object",
 							Properties: map[string]v1beta1.JSONSchemaProps{
+								"adminsecret": v1beta1.JSONSchemaProps{
+									Type: "string",
+								},
 								"api": v1beta1.JSONSchemaProps{
 									Type: "string",
 								},
@@ -162,6 +198,55 @@ var (
 							Required: []string{
 								"phase",
 							}},
+					},
+				},
+			},
+		},
+	}
+	// Define CRDs for resources
+	JenkinsJobCRD = v1beta1.CustomResourceDefinition{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "jenkinsjobs.jenkins.jenkinsoperator.maratoid.github.com",
+		},
+		Spec: v1beta1.CustomResourceDefinitionSpec{
+			Group:   "jenkins.jenkinsoperator.maratoid.github.com",
+			Version: "v1alpha1",
+			Names: v1beta1.CustomResourceDefinitionNames{
+				Kind:   "JenkinsJob",
+				Plural: "jenkinsjobs",
+			},
+			Scope: "Namespaced",
+			Validation: &v1beta1.CustomResourceValidation{
+				OpenAPIV3Schema: &v1beta1.JSONSchemaProps{
+					Type: "object",
+					Properties: map[string]v1beta1.JSONSchemaProps{
+						"apiVersion": v1beta1.JSONSchemaProps{
+							Type: "string",
+						},
+						"kind": v1beta1.JSONSchemaProps{
+							Type: "string",
+						},
+						"metadata": v1beta1.JSONSchemaProps{
+							Type: "object",
+						},
+						"spec": v1beta1.JSONSchemaProps{
+							Type: "object",
+							Properties: map[string]v1beta1.JSONSchemaProps{
+								"jenkinsinstance": v1beta1.JSONSchemaProps{
+									Type: "string",
+								},
+								"jobdsl": v1beta1.JSONSchemaProps{
+									Type: "string",
+								},
+								"jobxml": v1beta1.JSONSchemaProps{
+									Type: "string",
+								},
+							},
+						},
+						"status": v1beta1.JSONSchemaProps{
+							Type:       "object",
+							Properties: map[string]v1beta1.JSONSchemaProps{},
+						},
 					},
 				},
 			},
@@ -196,21 +281,19 @@ var (
 						"spec": v1beta1.JSONSchemaProps{
 							Type: "object",
 							Properties: map[string]v1beta1.JSONSchemaProps{
-								"config": v1beta1.JSONSchemaProps{
-									Type: "array",
-									Items: &v1beta1.JSONSchemaPropsOrArray{
-										Schema: &v1beta1.JSONSchemaProps{
-											Type: "string",
-										},
-									},
+								"jenkinsinstance": v1beta1.JSONSchemaProps{
+									Type: "string",
 								},
-								"jenkinsserverid": v1beta1.JSONSchemaProps{
+								"name": v1beta1.JSONSchemaProps{
+									Type: "string",
+								},
+								"pluginconfig": v1beta1.JSONSchemaProps{
 									Type: "string",
 								},
 								"pluginid": v1beta1.JSONSchemaProps{
 									Type: "string",
 								},
-								"version": v1beta1.JSONSchemaProps{
+								"pluginversion": v1beta1.JSONSchemaProps{
 									Type: "string",
 								},
 							},

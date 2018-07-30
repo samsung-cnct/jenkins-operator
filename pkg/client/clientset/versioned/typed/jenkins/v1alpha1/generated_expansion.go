@@ -20,4 +20,6 @@ package v1alpha1
 
 type JenkinsInstanceExpansion interface{}
 
+type JenkinsJobExpansion interface{}
+
 type JenkinsPluginExpansion interface{}

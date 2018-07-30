@@ -80,6 +80,9 @@ func operator(cmd *cobra.Command) {
 	stopCh := signals.SetupSignalHandler()
 	config := configlib.GetConfigOrDie()
 
+	// list assets
+	// glog.Fatalf("Assets: %v", bindata.AssetNames())
+
 	if installCRDs {
 		if err := install.NewInstaller(config).Install(&InstallStrategy{crds: inject.Injector.CRDs}); err != nil {
 			glog.Fatalf("Could not create CRDs: %v", err)
