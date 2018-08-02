@@ -1,5 +1,5 @@
 /*
-Copyright 2018 Samsung SDS Cloud Native Computing Team.
+Copyright 2018 Samsung CNCT.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,9 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!
-// Created by "kubebuilder create resource" for you to implement the JenkinsPlugin resource schema definition
-// as a go struct.
+// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // JenkinsPluginSpec defines the desired state of JenkinsPlugin
@@ -49,7 +47,7 @@ type JenkinsPluginSpec struct {
 // JenkinsPluginStatus defines the observed state of JenkinsPlugin
 type JenkinsPluginStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "kubebuilder generate" to regenerate code after modifying this file
+	// Important: Run "make" to regenerate code after modifying this file
 }
 
 // +genclient
@@ -64,4 +62,17 @@ type JenkinsPlugin struct {
 
 	Spec   JenkinsPluginSpec   `json:"spec,omitempty"`
 	Status JenkinsPluginStatus `json:"status,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// JenkinsPluginList contains a list of JenkinsPlugin
+type JenkinsPluginList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []JenkinsPlugin `json:"items"`
+}
+
+func init() {
+	SchemeBuilder.Register(&JenkinsPlugin{}, &JenkinsPluginList{})
 }

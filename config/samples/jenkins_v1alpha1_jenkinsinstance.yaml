@@ -1,0 +1,9 @@
+apiVersion: jenkins.jenkinsoperator.maratoid.github.com/v1alpha1
+kind: JenkinsInstance
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: jenkinsinstance-sample
+spec:
+  # Add fields here
+  foo: bar

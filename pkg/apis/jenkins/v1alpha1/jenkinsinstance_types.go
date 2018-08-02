@@ -1,5 +1,5 @@
 /*
-Copyright 2018 Samsung SDS Cloud Native Computing Team.
+Copyright 2018 Samsung CNCT.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,13 +18,10 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	corev1 "k8s.io/api/core/v1"
 )
 
-// EDIT THIS FILE!
-// Created by "kubebuilder create resource" for you to implement the JenkinsInstance resource schema definition
-// as a go struct.
-// NOTE: json tags are required.  Any new fields you add must have json tags fo\r the fields to be serialized.
+// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
+// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 type PluginSpec struct {
 	// plugin Id
@@ -111,4 +108,17 @@ type JenkinsInstance struct {
 
 	Spec   JenkinsInstanceSpec   `json:"spec,omitempty"`
 	Status JenkinsInstanceStatus `json:"status,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// JenkinsInstanceList contains a list of JenkinsInstance
+type JenkinsInstanceList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []JenkinsInstance `json:"items"`
+}
+
+func init() {
+	SchemeBuilder.Register(&JenkinsInstance{}, &JenkinsInstanceList{})
 }
