@@ -3,7 +3,47 @@ kind: JenkinsJob
 metadata:
   labels:
     controller-tools.k8s.io: "1.0"
-  name: jenkinsjob-sample
+  name: jenkinsjob-sample-xml
 spec:
-  # Add fields here
-  foo: bar
+  jenkinsinstance: jenkinsinstance-sample
+  jobxml: |
+    <?xml version="1.0" encoding="UTF-8"?><project>
+        <actions/>
+        <description>Job created from custom resource from XML</description>
+        <keepDependencies>false</keepDependencies>
+        <properties/>
+        <scm class="hudson.scm.NullSCM"/>
+        <canRoam>true</canRoam>
+        <disabled>false</disabled>
+        <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+        <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+        <triggers/>
+        <concurrentBuild>false</concurrentBuild>
+        <builders>
+            <hudson.tasks.Shell>
+                <command>echo Hello World with xml!</command>
+            </hudson.tasks.Shell>
+        </builders>
+        <publishers/>
+        <buildWrappers/>
+        <displayName>From custom resource XML</displayName>
+    </project>
+---
+apiVersion: jenkins.jenkinsoperator.maratoid.github.com/v1alpha1
+kind: JenkinsJob
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: jenkinsjob-sample-dsl
+spec:
+  jenkinsinstance: jenkinsinstance-sample
+  jobdsl: |
+      freeStyleJob('jenkinsjob-sample-dsl') {
+
+          description('Job created from custom resource with JobDSL')
+          displayName('From custom resource DSL')
+
+          steps {
+              shell('echo Hello World!')
+          }
+      }

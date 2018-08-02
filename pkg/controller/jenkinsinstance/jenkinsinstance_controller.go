@@ -17,14 +17,25 @@ limitations under the License.
 package jenkinsinstance
 
 import (
+	"bufio"
+	"bytes"
 	"context"
+	"fmt"
+	"github.com/golang/glog"
 	jenkinsv1alpha1 "github.com/maratoid/jenkins-operator/pkg/apis/jenkins/v1alpha1"
+	"github.com/maratoid/jenkins-operator/pkg/bindata"
+	"github.com/maratoid/jenkins-operator/pkg/util"
+	"gopkg.in/matryer/try.v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -32,22 +43,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"github.com/golang/glog"
-	"k8s.io/client-go/tools/record"
-	"bufio"
 	"strings"
-	"github.com/sethgrid/pester"
-	"gopkg.in/matryer/try.v1"
-	"fmt"
 	"text/template"
-	"bytes"
-	"github.com/PuerkitoBio/goquery"
-	"net/http"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/intstr"
-	"github.com/maratoid/jenkins-operator/pkg/bindata"
 	"time"
-	"github.com/maratoid/jenkins-operator/pkg/util"
 )
 
 const (
@@ -75,9 +73,9 @@ func Add(mgr manager.Manager) error {
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 	return &ReconcileJenkinsInstance{
-		Client: mgr.GetClient(),
+		Client:        mgr.GetClient(),
 		EventRecorder: mgr.GetRecorder("JenkinsInstanceController"),
-		scheme: mgr.GetScheme(),
+		scheme:        mgr.GetScheme(),
 	}
 }
 
@@ -95,12 +93,66 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// TODO(user): Modify this to be the types you create
-	// Uncomment watch a Deployment created by JenkinsInstance - change this for objects you create
+	// Watch a Deployment created by JenkinsInstance - change this for objects you create
 	err = c.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &jenkinsv1alpha1.JenkinsInstance{},
 	})
+	if err != nil {
+		return err
+	}
+
+	// Watch a Secret created by JenkinsInstance - change this for objects you create
+	err = c.Watch(&source.Kind{Type: &corev1.Secret{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &jenkinsv1alpha1.JenkinsInstance{},
+	})
+	if err != nil {
+		return err
+	}
+
+	// Watch a Service created by JenkinsInstance - change this for objects you create
+	err = c.Watch(&source.Kind{Type: &corev1.Service{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &jenkinsv1alpha1.JenkinsInstance{},
+	})
+	if err != nil {
+		return err
+	}
+
+	// Watch Secret resources not owned by the JenkinsInstance change
+	// This is needed for re-loading login information from the pre-provided secret
+	// When admin login secret changes, Watch will list all JenkinsInstances
+	// and re-enqueue the keys for the ones that refer to that admin login secret via their spec.
+	err = c.Watch(
+		&source.Kind{Type: &corev1.Secret{}},
+		&handler.EnqueueRequestsFromMapFunc{
+			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
+
+				jenkinsInstances := &jenkinsv1alpha1.JenkinsInstanceList{}
+				err = mgr.GetClient().List(
+					context.TODO(),
+					&client.ListOptions{LabelSelector: labels.Everything()},
+					jenkinsInstances)
+				if err != nil {
+					glog.Errorf("Could not list JenkinsInstances")
+					return []reconcile.Request{}
+				}
+
+				var keys []reconcile.Request
+				for _, inst := range jenkinsInstances.Items {
+					if inst.Spec.AdminSecret == a.Meta.GetName() {
+						keys = append(keys, reconcile.Request{
+							NamespacedName: types.NewNamespacedNameFromString(
+								fmt.Sprintf("%s%c%s", inst.Namespace, types.Separator, inst.Name)),
+						})
+					}
+				}
+
+				// return found keys
+				return keys
+			}),
+		})
 	if err != nil {
 		return err
 	}
@@ -135,7 +187,7 @@ func (bc *ReconcileJenkinsInstance) Reconcile(request reconcile.Request) (reconc
 		return reconcile.Result{}, err
 	}
 
-	baseName := jenkinsInstance.Spec.Name
+	baseName := jenkinsInstance.GetName()
 	if baseName == "" {
 		// We choose to absorb the error here as the worker would requeue the
 		// resource otherwise. Instead, the next time the resource is updated
@@ -297,7 +349,7 @@ func (bc *ReconcileJenkinsInstance) updateJenkinsInstanceStatus(jenkinsInstance 
 
 		// use admin secret data to get the user configuration page and parse out an api token
 		var err error
-		apiToken, err = bc.getJenkinsApiToken(jenkinsInstance, service, adminSecret)
+		apiToken, err = util.GetJenkinsApiToken(jenkinsInstance, service, adminSecret)
 		if err != nil {
 			glog.Errorf("Error: %v, retrying", err)
 			time.Sleep(10 * time.Second) // wait 10 seconds
@@ -318,7 +370,6 @@ func (bc *ReconcileJenkinsInstance) updateJenkinsInstanceStatus(jenkinsInstance 
 		glog.Errorf("Error updating secret %s: %v", setupSecret.Name, err)
 		return err
 	}
-
 
 	// TODO: update other status fields
 	api, err := util.GetServiceEndpoint(service, "", 8080)
@@ -345,7 +396,7 @@ func (bc *ReconcileJenkinsInstance) newSetupSecret(jenkinsInstance *jenkinsv1alp
 	labels := map[string]string{
 		"app":        "jenkinsci",
 		"controller": jenkinsInstance.Name,
-		"component": string(jenkinsInstance.UID),
+		"component":  string(jenkinsInstance.UID),
 	}
 
 	adminUserConfig, err := bindata.Asset("init-groovy/0-jenkins-config.groovy")
@@ -354,12 +405,12 @@ func (bc *ReconcileJenkinsInstance) newSetupSecret(jenkinsInstance *jenkinsv1alp
 	}
 
 	type JenkinsInfo struct {
-		User 		string
-		Password 	string
-		Url			string
-		AdminEmail	string
-		AgentPort	int32
-		Executors	int32
+		User       string
+		Password   string
+		Url        string
+		AdminEmail string
+		AgentPort  int32
+		Executors  int32
 	}
 
 	// decode Admin secret strings
@@ -370,12 +421,12 @@ func (bc *ReconcileJenkinsInstance) newSetupSecret(jenkinsInstance *jenkinsv1alp
 	}
 
 	jenkinsInfo := JenkinsInfo{
-		User: string(adminUser[:]),
-		Password: string(adminPassword[:]),
-		Url: jenkinsInstance.Spec.Location,
+		User:       string(adminUser[:]),
+		Password:   string(adminPassword[:]),
+		Url:        jenkinsInstance.Spec.Location,
 		AdminEmail: jenkinsInstance.Spec.AdminEmail,
-		AgentPort: jenkinsInstance.Spec.AgentPort,
-		Executors: jenkinsInstance.Spec.Executors,
+		AgentPort:  jenkinsInstance.Spec.AgentPort,
+		Executors:  jenkinsInstance.Spec.Executors,
 	}
 
 	// parse the plugin array
@@ -420,17 +471,17 @@ func (bc *ReconcileJenkinsInstance) newSetupSecret(jenkinsInstance *jenkinsv1alp
 	// add things to the string data
 	stringData := map[string]string{
 		"0-jenkins-config.groovy": jenkinsConfigParsed.String(),
-		"1-user-config.groovy": jenkinsInstance.Spec.Config,
-		"plugins.txt": strings.Join(pluginList, "\n"),
-		"seed-job-dsl": string(seedDsl[:]),
-		"user": adminUser,
+		"1-user-config.groovy":    jenkinsInstance.Spec.Config,
+		"plugins.txt":             strings.Join(pluginList, "\n"),
+		"seed-job-dsl":            string(seedDsl[:]),
+		"user":                    adminUser,
 	}
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: jenkinsInstance.Spec.Name,
+			Name:      jenkinsInstance.GetName(),
 			Namespace: jenkinsInstance.Namespace,
-			Labels: labels,
+			Labels:    labels,
 			OwnerReferences: []metav1.OwnerReference{
 				*metav1.NewControllerRef(jenkinsInstance, schema.GroupVersionKind{
 					Group:   jenkinsv1alpha1.SchemeGroupVersion.Group,
@@ -440,7 +491,7 @@ func (bc *ReconcileJenkinsInstance) newSetupSecret(jenkinsInstance *jenkinsv1alp
 			},
 		},
 		StringData: stringData,
-		Type: corev1.SecretTypeOpaque,
+		Type:       corev1.SecretTypeOpaque,
 	}
 
 	err = controllerutil.SetControllerReference(jenkinsInstance, secret, bc.scheme)
@@ -458,14 +509,14 @@ func (bc *ReconcileJenkinsInstance) newService(jenkinsInstance *jenkinsv1alpha1.
 	labels := map[string]string{
 		"app":        "jenkinsci",
 		"controller": jenkinsInstance.Name,
-		"component": string(jenkinsInstance.UID),
+		"component":  string(jenkinsInstance.UID),
 	}
 
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: jenkinsInstance.Spec.Name,
+			Name:      jenkinsInstance.GetName(),
 			Namespace: jenkinsInstance.Namespace,
-			Labels: labels,
+			Labels:    labels,
 			OwnerReferences: []metav1.OwnerReference{
 				*metav1.NewControllerRef(jenkinsInstance, schema.GroupVersionKind{
 					Group:   jenkinsv1alpha1.SchemeGroupVersion.Group,
@@ -478,18 +529,18 @@ func (bc *ReconcileJenkinsInstance) newService(jenkinsInstance *jenkinsv1alpha1.
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
 				{
-					Name: "master",
+					Name:     "master",
 					Protocol: "TCP",
-					Port: jenkinsInstance.Spec.MasterPort,
+					Port:     jenkinsInstance.Spec.MasterPort,
 					TargetPort: intstr.IntOrString{
 						Type:   intstr.Int,
 						IntVal: jenkinsInstance.Spec.MasterPort,
 					},
 				},
 				{
-					Name: "agent",
+					Name:     "agent",
 					Protocol: "TCP",
-					Port: jenkinsInstance.Spec.AgentPort,
+					Port:     jenkinsInstance.Spec.AgentPort,
 					TargetPort: intstr.IntOrString{
 						Type:   intstr.Int,
 						IntVal: jenkinsInstance.Spec.AgentPort,
@@ -518,7 +569,7 @@ func (bc *ReconcileJenkinsInstance) newDeployment(jenkinsInstance *jenkinsv1alph
 	labels := map[string]string{
 		"app":        "jenkinsci",
 		"controller": jenkinsInstance.Name,
-		"component": string(jenkinsInstance.UID),
+		"component":  string(jenkinsInstance.UID),
 	}
 
 	// get binary data for variables and groovy config
@@ -536,16 +587,16 @@ func (bc *ReconcileJenkinsInstance) newDeployment(jenkinsInstance *jenkinsv1alph
 
 		envComponents := strings.Split(scanner.Text(), ":")
 		env = append(env, corev1.EnvVar{
-			Name:      envComponents[0],
-			Value:     envComponents[1],
+			Name:  envComponents[0],
+			Value: envComponents[1],
 		})
 	}
 
 	// user-specified environment variables
 	for envVar, envVarVal := range jenkinsInstance.Spec.Env {
 		env = append(env, corev1.EnvVar{
-			Name:      envVar,
-			Value:     envVarVal,
+			Name:  envVar,
+			Value: envVarVal,
 		})
 	}
 
@@ -559,21 +610,21 @@ func (bc *ReconcileJenkinsInstance) newDeployment(jenkinsInstance *jenkinsv1alph
 	pvcName := jenkinsInstance.Spec.JobsPvc
 	var volumeSource corev1.VolumeSource
 	if pvcName == "" {
-		volumeSource = corev1.VolumeSource {
+		volumeSource = corev1.VolumeSource{
 			EmptyDir: &corev1.EmptyDirVolumeSource{},
 		}
 	} else {
 		volumeSource = corev1.VolumeSource{
 			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
 				ClaimName: pvcName,
-				ReadOnly: false,
+				ReadOnly:  false,
 			},
 		}
 	}
 
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      jenkinsInstance.Spec.Name,
+			Name:      jenkinsInstance.GetName(),
 			Namespace: jenkinsInstance.Namespace,
 			OwnerReferences: []metav1.OwnerReference{
 				*metav1.NewControllerRef(jenkinsInstance, schema.GroupVersionKind{
@@ -599,20 +650,20 @@ func (bc *ReconcileJenkinsInstance) newDeployment(jenkinsInstance *jenkinsv1alph
 							Image: jenkinsInstance.Spec.Image,
 							Ports: []corev1.ContainerPort{
 								{
-									Name:"master",
+									Name:          "master",
 									ContainerPort: jenkinsInstance.Spec.MasterPort,
-									HostPort: jenkinsInstance.Spec.MasterPort,
-									Protocol: "TCP",
+									HostPort:      jenkinsInstance.Spec.MasterPort,
+									Protocol:      "TCP",
 								},
 								{
-									Name:"agent",
+									Name:          "agent",
 									ContainerPort: jenkinsInstance.Spec.AgentPort,
-									HostPort: jenkinsInstance.Spec.AgentPort,
-									Protocol: "TCP",
+									HostPort:      jenkinsInstance.Spec.AgentPort,
+									Protocol:      "TCP",
 								},
 							},
 							Env: env,
-							Command: []string {
+							Command: []string{
 								"bash",
 								"-c",
 								commandString,
@@ -637,13 +688,13 @@ func (bc *ReconcileJenkinsInstance) newDeployment(jenkinsInstance *jenkinsv1alph
 						{
 							Name: "init-groovy-d",
 							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource {
-									SecretName: jenkinsInstance.Spec.Name,
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: jenkinsInstance.GetName(),
 								},
 							},
 						},
 						{
-							Name: "job-storage",
+							Name:         "job-storage",
 							VolumeSource: volumeSource,
 						},
 					},
@@ -658,63 +709,4 @@ func (bc *ReconcileJenkinsInstance) newDeployment(jenkinsInstance *jenkinsv1alph
 	}
 
 	return deployment, nil
-}
-
-// getJenkinsApiToken gets an api token for the admin user from a newly created jenkins deployment
-func (bc *ReconcileJenkinsInstance) getJenkinsApiToken(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, service *corev1.Service, adminSecret *corev1.Secret) (string, error) {
-
-	serviceUrl, err := util.GetServiceEndpoint(service, "me/configure", jenkinsInstance.Spec.MasterPort)
-	if err != nil {
-		return "", err
-	}
-
-	adminUser := string(adminSecret.Data["user"][:])
-	adminPassword := string(adminSecret.Data["pass"][:])
-
-	// get the user config page
-	req, err := http.NewRequest("GET", serviceUrl, nil)
-	if err != nil {
-		glog.Errorf("Error creating GET request to %s", serviceUrl)
-		return "", err
-	}
-
-	req.SetBasicAuth(string(adminUser[:]), string(adminPassword[:]))
-	if err != nil {
-		glog.Errorf("Error setting basic auth on GET request to %s", serviceUrl)
-		return "", err
-	}
-
-	client := pester.New()
-	client.MaxRetries = 5
-	client.Backoff = pester.ExponentialBackoff
-	client.KeepLog = true
-
-	resp, err := client.Do(req)
-	if err != nil {
-		glog.Errorf("Error performing GET request to %s: %v", serviceUrl, err)
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
-	if err != nil {
-		glog.Errorf("Error parsing response: %v", err)
-		return "", err
-	}
-
-	var apiToken string = ""
-	doc.Find("input#apiToken").Each(func(i int, element *goquery.Selection) {
-		value, exists := element.Attr("value")
-		if exists {
-			apiToken = value
-		}
-	})
-
-	if apiToken == "" {
-		err = fmt.Errorf("element 'apiToken' missing value")
-	} else {
-		err = nil
-	}
-
-	return apiToken, err
 }

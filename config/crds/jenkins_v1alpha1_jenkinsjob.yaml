@@ -21,6 +21,13 @@ spec:
         metadata:
           type: object
         spec:
+          properties:
+            jenkinsinstance:
+              type: string
+            jobdsl:
+              type: string
+            jobxml:
+              type: string
           type: object
         status:
           type: object

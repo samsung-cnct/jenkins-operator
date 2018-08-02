@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -38,9 +39,6 @@ type JenkinsInstanceSpec struct {
 	// What container image to use for a new jenkins instance
 	// +kubebuilder:validation:Pattern=.+:.+
 	Image string `json:"image,omitempty"`
-
-	// Service name for the jenkins instance
-	Name string `json:"name,omitempty"`
 
 	// Dictionary of environment variable values
 	Env map[string]string `json:"env,omitempty"`

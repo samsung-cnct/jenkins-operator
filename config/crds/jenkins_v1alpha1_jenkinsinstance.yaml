@@ -21,8 +21,58 @@ spec:
         metadata:
           type: object
         spec:
+          properties:
+            adminemail:
+              type: string
+            adminsecret:
+              type: string
+            agentport:
+              format: int32
+              type: integer
+            config:
+              type: string
+            env:
+              type: object
+            executors:
+              format: int32
+              type: integer
+            image:
+              pattern: .+:.+
+              type: string
+            jobspvc:
+              type: string
+            location:
+              type: string
+            masterport:
+              format: int32
+              type: integer
+            plugins:
+              items:
+                properties:
+                  id:
+                    type: string
+                  version:
+                    type: string
+                type: object
+              type: array
+            pullpolicy:
+              type: string
+            replicas:
+              format: int32
+              type: integer
+            servicetype:
+              type: string
           type: object
         status:
+          properties:
+            adminsecret:
+              type: string
+            api:
+              type: string
+            phase:
+              type: string
+          required:
+          - phase
           type: object
       type: object
   version: v1alpha1

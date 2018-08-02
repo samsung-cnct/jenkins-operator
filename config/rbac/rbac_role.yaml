@@ -17,6 +17,30 @@ rules:
   - patch
   - delete
 - apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
   - jenkins.jenkinsoperator.maratoid.github.com
   resources:
   - jenkinsinstances
@@ -29,9 +53,9 @@ rules:
   - patch
   - delete
 - apiGroups:
-  - apps
+  - batch
   resources:
-  - deployments
+  - jobs
   verbs:
   - get
   - list
@@ -53,9 +77,9 @@ rules:
   - patch
   - delete
 - apiGroups:
-  - apps
+  - batch
   resources:
-  - deployments
+  - jobs
   verbs:
   - get
   - list
