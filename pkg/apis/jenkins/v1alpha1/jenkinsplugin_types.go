@@ -25,9 +25,7 @@ import (
 
 // JenkinsPluginSpec defines the desired state of JenkinsPlugin
 type JenkinsPluginSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "kubebuilder generate" to regenerate code after modifying this file
-
+	// Important: Run "make" to regenerate code after modifying this file
 	// Name of this JenkinsPlugin Object
 	Name string `json:"name,omitempty"`
 

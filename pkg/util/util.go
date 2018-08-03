@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/golang/glog"
-	configlib "github.com/kubernetes-sigs/kubebuilder/pkg/config"
 	jenkinsv1alpha1 "github.com/maratoid/jenkins-operator/pkg/apis/jenkins/v1alpha1"
 	"github.com/sethgrid/pester"
 	corev1 "k8s.io/api/core/v1"
@@ -13,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 func AmRunningInCluster() bool {
@@ -30,7 +30,7 @@ func GetServiceEndpoint(service *corev1.Service, path string, internalPort int32
 			"http://%s.%s.svc.cluster.local:%d",
 			service.Name, service.Namespace, internalPort)
 	} else {
-		restConfig, err := configlib.GetConfig()
+		restConfig, err := config.GetConfig()
 		if err != nil {
 			return "", err
 		}

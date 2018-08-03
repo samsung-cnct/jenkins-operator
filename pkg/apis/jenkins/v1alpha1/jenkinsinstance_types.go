@@ -33,8 +33,7 @@ type PluginSpec struct {
 
 // JenkinsInstanceSpec defines the desired state of JenkinsInstance
 type JenkinsInstanceSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "kubebuilder generate" to regenerate code after modifying this file
+	// Important: Run "make" to regenerate code after modifying this file
 
 	// What container image to use for a new jenkins instance
 	// +kubebuilder:validation:Pattern=.+:.+
@@ -81,8 +80,7 @@ type JenkinsInstanceSpec struct {
 
 // JenkinsInstanceStatus defines the observed state of JenkinsInstance
 type JenkinsInstanceStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "kubebuilder generate" to regenerate code after modifying this file
+	// Important: Run "make" to regenerate code after modifying this file
 
 	// full url to newly created jenkins remote API endpoint
 	Api string `json:"api,omitempty"`

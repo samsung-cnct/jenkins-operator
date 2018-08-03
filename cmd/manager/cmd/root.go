@@ -54,7 +54,6 @@ func init() {
 	viper.SetEnvKeyReplacer(replacer)
 	viper.AutomaticEnv()
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
-	pflag.Parse()
 	viper.BindPFlags(pflag.CommandLine)
 }
 
