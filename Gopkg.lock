@@ -177,8 +177,8 @@
 [[projects]]
   name = "github.com/kubernetes-sigs/kubebuilder"
   packages = ["pkg/config"]
-  revision = "9c4c6c213a8d17f8c21cf4f1aa9cefb99fbbf5ca"
-  version = "v1.0.0"
+  revision = "a523fb6b174c2785084eb0948c4cfdaf2f818bc4"
+  version = "v0.1.12"
 
 [[projects]]
   name = "github.com/magiconair/properties"
@@ -751,7 +751,7 @@
     "pkg/source",
     "pkg/source/internal"
   ]
-  revision = "3aaf8cdb09ecb557514d99ba682b1173bd61b870"
+  revision = "d12eff37fd2a40edb220eaa91e1b1059bc62149f"
 
 [[projects]]
   branch = "master"
@@ -778,6 +778,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "944a7cebb056a996f27551b1a7df52eb9a3c6781e6755124efaf3321f353f193"
+  inputs-digest = "8e13d631f5d67b3904afb3ac3de9f4ac67f100058d9f73c1cee4e91e53f7abb4"
   solver-name = "gps-cdcl"
   solver-version = 1

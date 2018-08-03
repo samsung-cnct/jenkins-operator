@@ -22,9 +22,8 @@ install:
   -
 
 script:
-- TRACE=1 ./testv0.sh
+- TRACE=1 ./test.sh
 - ./test_existing_projects.sh
-- TRACE=1 ./testv1.sh
 
 # TBD. Suppressing for now.
 notifications:

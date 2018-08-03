@@ -2,6 +2,11 @@
 
 
 [[projects]]
+  name = "github.com/emicklei/go-restful"
+  packages = ["log"]
+  revision = "ff4f55a206334ef123e4f79bbf348980da81ca46"
+
+[[projects]]
   name = "github.com/ghodss/yaml"
   packages = ["."]
   revision = "0ca9ea5df5451ffdf184b4428c902747c2c11cd7"
@@ -10,8 +15,8 @@
 [[projects]]
   name = "github.com/gobuffalo/envy"
   packages = ["."]
-  revision = "2d0f467653f3d961ce9ada4d32a230bdcb3bfe11"
-  version = "v1.6.3"
+  revision = "ef60bfc50c8f92d1ee64674d8ce7a48f1f67625e"
+  version = "v1.6.2"
 
 [[projects]]
   name = "github.com/gogo/protobuf"
@@ -49,7 +54,7 @@
   branch = "master"
   name = "github.com/markbates/inflect"
   packages = ["."]
-  revision = "84854b5b4c0dbb0c107480d480a71f7db1fc7dae"
+  revision = "fbc6b23ce49e2578f572d2e72bb72fa03c7145de"
 
 [[projects]]
   name = "github.com/pkg/errors"
@@ -74,9 +79,10 @@
     "http/httpguts",
     "http2",
     "http2/hpack",
-    "idna"
+    "idna",
+    "lex/httplex"
   ]
-  revision = "cffdcf672aee934982473246bc7e9a8ba446aa9b"
+  revision = "5f9ae10d9af5b1c89ae6904293b14b064d4ada23"
 
 [[projects]]
   name = "golang.org/x/text"
@@ -107,7 +113,7 @@
     "imports",
     "internal/fastwalk"
   ]
-  revision = "2087f8c10712366cfc2f4fcb1bf99eeef61ab21e"
+  revision = "8e070db38e5c55da6a85c81878ab769bf5667848"
 
 [[projects]]
   name = "gopkg.in/inf.v0"
@@ -190,25 +196,11 @@
     "parser",
     "types"
   ]
-  revision = "fdcf9f9480fdd5bf2b3c3df9bf4ecd22b25b87e2"
-
-[[projects]]
-  branch = "master"
-  name = "sigs.k8s.io/controller-tools"
-  packages = [
-    "pkg/scaffold",
-    "pkg/scaffold/controller",
-    "pkg/scaffold/input",
-    "pkg/scaffold/manager",
-    "pkg/scaffold/project",
-    "pkg/scaffold/resource",
-    "pkg/util"
-  ]
-  revision = "baf783301797f950d03f5e13933d1c8dbab7c090"
+  revision = "01a732e01d00cb9a81bb0ca050d3e6d2b947927b"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "5f2f7c7d77ad09b2125ce55c6718ca5871a9fb30afa58a0bb1728a6185dd51b2"
+  inputs-digest = "53c0546d5938231df9b5bf3a3e878723d37026c0048dd7238a5e57dcc5e47992"
   solver-name = "gps-cdcl"
   solver-version = 1

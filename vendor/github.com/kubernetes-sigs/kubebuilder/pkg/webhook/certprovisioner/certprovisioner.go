@@ -1,9 +1,12 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2018 The Kubernetes Authors.
+
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
+
     http://www.apache.org/licenses/LICENSE-2.0
+
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -11,10 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package signals
+package certprovisioner
 
-import (
-	"os"
-)
+// Certs hosts a private key, its corresponding serving certificate and
+// the CA certificate that signs the serving certificate.
+type Certs struct {
+	Key    []byte
+	Cert   []byte
+	CACert []byte
+}
 
-var shutdownSignals = []os.Signal{os.Interrupt}
+// CertProvisioner is an interface to provision the serving certificate.
+type CertProvisioner interface {
+	// ProvisionServingCert returns a Certs struct.
+	ProvisionServingCert() (*Certs, error)
+}

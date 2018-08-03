@@ -22,7 +22,7 @@ import (
 )
 
 // createAPIs creates a new package under pkg/apis
-func createAPIs(boilerplate, domain string) {
+func createAPIs(boilerplate string) {
 	fmt.Printf("\t%s/\n", filepath.Join("pkg", "apis"))
 	execute(
 		filepath.Join("pkg", "apis", "doc.go"),

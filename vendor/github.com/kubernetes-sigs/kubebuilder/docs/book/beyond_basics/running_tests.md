@@ -1,3 +1,7 @@
+{% panel style="info", title="Under Development" %}
+This book is being actively developed.
+{% endpanel %}
+
 # Running tests
 
 Kubebuilder will create scaffolding tests for controllers and resources.  When run, these tests will start
@@ -7,16 +11,17 @@ using the provided config.
 #### Resource Tests
 
 The resource tests are created under `pkg/apis/<group>/<version>/<kind>_types_test.go`.  When a resource
-is created with `kubebuilder create api`, a test file will be created to store and read back the object.
+is created with `kubebuilder create resource`, a test file will be created to store and read back the object.
 
 Update the test to include validation you add to your resource.
 
 For more on Resources see [What Is A Resource](../basics/what_is_a_resource.md) 
 
+
 #### Controller Tests
 
 The controller tests are created under `pkg/controller/<kind>/controller_test.go`.  When a resource
-is created with `kubebuilder create api`, a test file will be created to start the controller
+is created with `kubebuilder create resource`, a test file will be created to start the controller
 and reconcile objects.  The default test will create a new object and verify that the controller
 Reconcile function is called.
 
@@ -27,11 +32,11 @@ For more on Controllers see [What Is A Controller](../basics/what_is_a_controlle
 {% method %}
 ## Run the tests
 
-Run the tests using `make test`.
+Run the tests using `go test`.
 
 {% sample lang="shell" %}
 ```bash
-make test
+go test ./pkg/...
 ```
 {% endmethod %}
 

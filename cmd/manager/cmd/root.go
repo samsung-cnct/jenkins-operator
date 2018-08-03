@@ -32,6 +32,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/golang/glog"
+	"github.com/spf13/pflag"
 	"os"
 	"strings"
 )
@@ -52,9 +53,9 @@ func init() {
 	replacer := strings.NewReplacer("-", "_")
 	viper.SetEnvKeyReplacer(replacer)
 	viper.AutomaticEnv()
-	rootCmd.Flags().Bool("install-crds", true, "install the CRDs used by the controller as part of startup")
-	rootCmd.Flags().AddGoFlagSet(flag.CommandLine)
-	//rootCmd.Flags().Parse()
+	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
+	pflag.Parse()
+	viper.BindPFlags(pflag.CommandLine)
 }
 
 func Execute() {

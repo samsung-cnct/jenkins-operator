@@ -4,7 +4,7 @@ required = [
     "github.com/onsi/gomega", # for test matchers
     "k8s.io/client-go/plugin/pkg/client/auth/gcp", # for development against gcp
     "k8s.io/code-generator/cmd/deepcopy-gen", # for go generate
-    "sigs.k8s.io/controller-tools/cmd/controller-gen", # for crd/rbac generation
+    "sigs.k8s.io/controller-tools/cmd/controller-gen", # for crd/rbac generation`
     "sigs.k8s.io/controller-runtime/pkg/client/config",
     "sigs.k8s.io/controller-runtime/pkg/controller",
     "sigs.k8s.io/controller-runtime/pkg/handler",
@@ -18,6 +18,17 @@ required = [
 [prune]
   go-tests = true
 
+[[override]]
+name="github.com/PuerkitoBio/purell"
+version="v1.1.0"
+
+[[override]]
+name="gopkg.in/matryer/try.v1"
+version="v1"
+
+[[override]]
+name="github.com/sethgrid/pester"
+version="1.0.0"
 
 # STANZAS BELOW ARE GENERATED AND MAY BE WRITTEN - DO NOT MODIFY BELOW THIS LINE.
 

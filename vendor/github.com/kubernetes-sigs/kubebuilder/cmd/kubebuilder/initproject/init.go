@@ -27,57 +27,32 @@ import (
 
 	"github.com/kubernetes-sigs/kubebuilder/cmd/kubebuilder/util"
 	"github.com/spf13/cobra"
-	"sigs.k8s.io/controller-tools/pkg/scaffold/manager"
-	"sigs.k8s.io/controller-tools/pkg/scaffold/project"
 )
 
-
-type initOptions struct {
-	domain string
-	copyright string
-	bazel bool
-	controllerOnly bool
-	projectVersion string
-	projectOptions
-}
-
-func AddInit(cmd *cobra.Command) {
-	o := initOptions{}
-
-	initCmd := &cobra.Command{
-		Use:   "init",
-		Short: "Initialize a new project",
-		Long:  `Initialize a new project including vendor/ directory and Go package directories.`,
-		Example: `# Initialize project structure
+var repoCmd = &cobra.Command{
+	Use:   "init",
+	Short: "Initialize a new project",
+	Long:  `Initialize a new project including vendor/ directory and go package directories.`,
+	Example: `# Initialize project structure
 kubebuilder init repo --domain mydomain
 `,
-		Run: func(cmd *cobra.Command, args []string) {
-            o.runInitRepo()
-		},
-	}
-
-	v0comment := "Works only with project-version v0, "
-	initCmd.Flags().StringVar(&o.domain, "domain", "", "domain for the API groups")
-	initCmd.Flags().StringVar(&o.copyright, "copyright", filepath.Join("hack", "boilerplate.go.txt"), v0comment + "Location of copyright boilerplate file.")
-	initCmd.Flags().BoolVar(&o.bazel, "bazel", false, v0comment + "if true, setup Bazel workspace artifacts")
-	initCmd.Flags().BoolVar(&o.controllerOnly, "controller-only", false, v0comment + "if true, setup controller only")
-	initCmd.Flags().StringVar(&o.projectVersion, "project-version", "v1", "if set to v0, init project with kubebuilder legacy version")
-
-
-	initCmd.Flags().BoolVar(
-		&o.dep, "dep", true,"if specified, determines whether dep will be used.")
-	o.depFlag = initCmd.Flag("dep")
-
-	o.prj = projectForFlags(initCmd.Flags())
-	o.bp = boilerplateForFlags(initCmd.Flags())
-	o.gopkg = &project.GopkgToml{}
-	o.mgr = &manager.Cmd{}
-	o.dkr = &manager.Dockerfile{}
-
-	cmd.AddCommand(initCmd)
+	Run: runInitRepo,
 }
 
-func (o *initOptions) runInitRepo() {
+var domain string
+var copyright string
+var bazel bool
+var controllerOnly bool
+
+func AddInit(cmd *cobra.Command) {
+	cmd.AddCommand(repoCmd)
+	repoCmd.Flags().StringVar(&domain, "domain", "", "domain for the API groups")
+	repoCmd.Flags().StringVar(&copyright, "copyright", filepath.Join("hack", "boilerplate.go.txt"), "Location of copyright boilerplate file.")
+	repoCmd.Flags().BoolVar(&bazel, "bazel", false, "if true, setup Bazel workspace artifacts")
+	repoCmd.Flags().BoolVar(&controllerOnly, "controller-only", false, "if true, setup controller only")
+}
+
+func runInitRepo(cmd *cobra.Command, args []string) {
 	version := runtime.Version()
 	if versionCmp(version, "go1.10") < 0 {
 		log.Fatalf("The go version is %v, must be 1.10+", version)
@@ -86,26 +61,18 @@ func (o *initOptions) runInitRepo() {
 		log.Fatalf("Dep is not installed. Follow steps at: https://golang.github.io/dep/docs/installation.html")
 	}
 
-	if o.projectVersion == "v1" {
-		if len(o.domain) != 0 {
-			o.prj.Domain = o.domain
-		}
-		o.RunInit()
-		return
-	}
-
-	if len(o.domain) == 0 {
+	if len(domain) == 0 {
 		log.Fatal("Must specify --domain")
 	}
-	cr := util.GetCopyright(o.copyright)
+	cr := util.GetCopyright(copyright)
 
 	fmt.Printf("Initializing project structure...\n")
-	if o.bazel {
+	if bazel {
 		createBazelWorkspace()
 	}
 	createControllerManager(cr)
 	//createInstaller(cr)
-	createAPIs(cr, o.domain)
+	createAPIs(cr)
 	//runCreateApiserver(cr)
 
 	pkgs := []string{
@@ -122,8 +89,8 @@ func (o *initOptions) runInitRepo() {
 	}
 	doDockerfile()
 	doInject(cr)
-	doArgs(cr, o.controllerOnly)
-	RunVendorInstall(nil, []string{o.copyright})
+	doArgs(cr, controllerOnly)
+	RunVendorInstall(nil, nil)
 	createBoilerplate()
 	fmt.Printf("Next: Define a resource with:\n" +
 		"$ kubebuilder create resource\n")
