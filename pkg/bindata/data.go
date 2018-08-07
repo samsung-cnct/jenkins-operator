@@ -285,14 +285,14 @@ func AssetNames() []string {
 
 // _bindata is a table, holding each asset generator, mapped to its name.
 var _bindata = map[string]func() (*asset, error){
-	".DS_Store": Ds_store,
+	".DS_Store":                           Ds_store,
 	"environment/jenkins-jvm-environment": environmentJenkinsJvmEnvironment,
-	"environment/required-plugins": environmentRequiredPlugins,
+	"environment/required-plugins":        environmentRequiredPlugins,
 	"init-groovy/0-jenkins-config.groovy": initGroovy0JenkinsConfigGroovy,
-	"job-scripts/install-dsl-job.sh": jobScriptsInstallDslJobSh,
-	"job-scripts/install-xml-job.sh": jobScriptsInstallXmlJobSh,
-	"jobdsl/seed-job-dsl": jobdslSeedJobDsl,
-	"plugin-scripts/install-plugin.sh": pluginScriptsInstallPluginSh,
+	"job-scripts/install-dsl-job.sh":      jobScriptsInstallDslJobSh,
+	"job-scripts/install-xml-job.sh":      jobScriptsInstallXmlJobSh,
+	"jobdsl/seed-job-dsl":                 jobdslSeedJobDsl,
+	"plugin-scripts/install-plugin.sh":    pluginScriptsInstallPluginSh,
 }
 
 // AssetDir returns the file names below a certain
@@ -334,11 +334,12 @@ type bintree struct {
 	Func     func() (*asset, error)
 	Children map[string]*bintree
 }
+
 var _bintree = &bintree{nil, map[string]*bintree{
 	".DS_Store": &bintree{Ds_store, map[string]*bintree{}},
 	"environment": &bintree{nil, map[string]*bintree{
 		"jenkins-jvm-environment": &bintree{environmentJenkinsJvmEnvironment, map[string]*bintree{}},
-		"required-plugins": &bintree{environmentRequiredPlugins, map[string]*bintree{}},
+		"required-plugins":        &bintree{environmentRequiredPlugins, map[string]*bintree{}},
 	}},
 	"init-groovy": &bintree{nil, map[string]*bintree{
 		"0-jenkins-config.groovy": &bintree{initGroovy0JenkinsConfigGroovy, map[string]*bintree{}},
@@ -401,4 +402,3 @@ func _filePath(dir, name string) string {
 	cannonicalName := strings.Replace(name, "\\", "/", -1)
 	return filepath.Join(append([]string{dir}, strings.Split(cannonicalName, "/")...)...)
 }
-
