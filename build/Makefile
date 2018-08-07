@@ -1,5 +1,4 @@
 GOCMD=go
-KUBEBUILDERCMD=kubebuilder
 DOCKERTAG?=jenkins-operator:local
 GOBUILD=$(GOCMD) build
 GOGET=$(GOCMD) get
@@ -29,29 +28,61 @@ LDFLAGS = '${STATIC_FLAGS} ${LD_DATA}'
 
 # Location of
 OPERATOR_BINARY_NAME=jenkins-operator
-OPERATOR_SOURCE_FILE=cmd/controller-manager/main.go
+OPERATOR_SOURCE_FILE=cmd/manager/main.go
 
 # build binary command
 BUILD_OPERATOR_BINARY_CMD=${GOBUILD} -a -tags netgo -ldflags ${LDFLAGS} -o ${OPERATOR_BINARY_NAME} ${OPERATOR_SOURCE_FILE}
 
-# By default we will most likely want to build a linux build of the application
-all: bin-data kube-builder jenkins-operator-linux-amd64
-linux: bin-data kube-builder jenkins-operator-linux-amd64
-darwin: bin-data kube-builder jenkins-operator-darwin-amd64
-container: bin-data kube-builder jenkins-operator-docker
-
-# Clean will clean up dep and remove any binaries
-clean: remove-binary
+all: bin-data test manager-linux-amd64
+linux: bin-data test manager-linux-amd64
+darwin: bin-data test manager-darwin-amd64
+container: bin-data docker-build
 
 # generate bindata
 bin-data:
 	go-bindata -o $(PROJECTDIR)/pkg/bindata/data.go -ignore data\\.go -pkg bindata -prefix $(PROJECTDIR)/pkg/bindata $(PROJECTDIR)/pkg/bindata/...
 
-# Generate kube builder code
-kube-builder:
-	$(KUBEBUILDERCMD) generate
+# Run tests
+test: generate fmt vet manifests
+	go test ./pkg/... ./cmd/... -coverprofile cover.out
 
-# Install dep will install dep in $GOROOT/bin
+# Build manager binary
+manager-linux-amd64: generate fmt vet
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 ${BUILD_OPERATOR_BINARY_CMD}
+manager-darwin-amd64: generate fmt vet
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 ${BUILD_OPERATOR_BINARY_CMD}
+
+# Run against the configured Kubernetes cluster in ~/.kube/config
+run: generate fmt vet
+	go run ./cmd/manager/main.go
+
+# Install CRDs into a cluster
+install: manifests
+	kubectl apply -f config/crds
+
+# Deploy controller in the configured Kubernetes cluster in ~/.kube/config
+deploy: manifests
+	kubectl apply -f config/crds
+	kustomize build config/default | kubectl apply -f -
+
+# Generate manifests e.g. CRD, RBAC etc.
+manifests:
+	go run vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go all
+	go-bindata -o $(PROJECTDIR)/config/crds/data.go -ignore data\\.go -pkg crds -prefix $(PROJECTDIR)/config/crds $(PROJECTDIR)/config/crds/...
+
+# Run go fmt against code
+fmt:
+	go fmt ./pkg/... ./cmd/...
+
+# Run go vet against code
+vet:
+	go vet ./pkg/... ./cmd/...
+
+# Generate code
+generate:
+	go generate ./pkg/... ./cmd/...
+
+# Install dep will install dependencies
 install-dep:
 	go get -u github.com/golang/dep/cmd/dep
 	go get -u github.com/go-bindata/go-bindata/...
@@ -65,18 +96,12 @@ new-dep:
 dep-ensure:
 	$(DEPCMD) ensure
 
-# Build a darwin (mac) binary
-jenkins-operator-darwin-amd64:
-	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 ${BUILD_OPERATOR_BINARY_CMD}
-
-# Build a linux amd64 binary
-jenkins-operator-linux-amd64:
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 ${BUILD_OPERATOR_BINARY_CMD}
-
-# Build a docker image
-jenkins-operator-docker:
+# Build the docker image
+docker-build: test
 	docker build $(PROJECTDIR) -f $(PROJECTDIR)/build/docker/Dockerfile -t $(DOCKERTAG)
+	@echo "updating kustomize image patch file for manager resource"
+	sed -i 's@image: .*@image: '"${DOCKERTAG}"'@' $(PROJECTDIR)/config/default/manager_image_patch.yaml
 
-# Delete an existing binary / cleanup
-remove-binary:
-	rm ${OPERATOR_BINARY_NAME}
+# Push the docker image
+docker-push:
+	docker push ${IMG}
