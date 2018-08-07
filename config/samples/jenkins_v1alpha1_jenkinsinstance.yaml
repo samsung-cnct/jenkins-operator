@@ -5,20 +5,20 @@ metadata:
     controller-tools.k8s.io: "1.0"
   name: jenkinsinstance-sample
 spec:
-  image: jenkins/jenkins:lts
-    name: operatedjenkins
-    env:
-      SOME_ENV: "test"
-    masterport: 8080
-    agentport: 50000
-    executors: 2
-    replicas: 1
-    plugins:
-      - id: greenballs
-        version: "1.15"
-    pullpolicy: Always
-    servicetype: NodePort
-    adminsecret: jenkins-test
-    jobspvc: jenkins-test
-    location: https://jenkins.example.com
-    adminemail: admin@example.com
+  image: "jenkins/jenkins:lts"
+  name: operatedjenkins
+  env:
+    SOME_ENV: "test"
+  masterport: 8080
+  agentport: 50000
+  executors: 2
+  replicas: 1
+  plugins:
+    - id: greenballs
+      version: "1.15"
+  pullpolicy: Always
+  servicetype: NodePort
+  adminsecret: jenkins-test
+  jobspvc: jenkins-test
+  location: https://jenkins.example.com
+  adminemail: admin@example.com

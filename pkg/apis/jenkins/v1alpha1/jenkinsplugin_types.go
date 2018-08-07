@@ -26,8 +26,6 @@ import (
 // JenkinsPluginSpec defines the desired state of JenkinsPlugin
 type JenkinsPluginSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
-	// Name of this JenkinsPlugin Object
-	Name string `json:"name,omitempty"`
 
 	// ID of the JenkinsServer instance to install this plugin in
 	JenkinsInstance string `json:"jenkinsinstance,omitempty"`

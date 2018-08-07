@@ -21,19 +21,20 @@ import (
 
 	"github.com/maratoid/jenkins-operator/pkg/apis"
 	"github.com/maratoid/jenkins-operator/pkg/controller"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
 
 	"flag"
 	"fmt"
 	"github.com/golang/glog"
-	"github.com/spf13/pflag"
+	"github.com/maratoid/jenkins-operator/config/crds"
+	"io/ioutil"
 	"os"
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"strings"
 )
 
@@ -43,7 +44,7 @@ var (
 		Short: "Jenkins Operator",
 		Long:  `Jenkins CI Operator`,
 		Run: func(cmd *cobra.Command, args []string) {
-			operator()
+			operator(cmd)
 		},
 	}
 )
@@ -53,8 +54,13 @@ func init() {
 	replacer := strings.NewReplacer("-", "_")
 	viper.SetEnvKeyReplacer(replacer)
 	viper.AutomaticEnv()
-	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
-	viper.BindPFlags(pflag.CommandLine)
+
+	rootCmd.Flags().Bool("install-crds", true, "install the CRDs used by the controller as part of startup")
+	viper.BindPFlag("installCrds", rootCmd.Flags().Lookup("install-crds"))
+	rootCmd.Flags().AddGoFlagSet(flag.CommandLine)
+
+	// get rid of glog noise (https://github.com/kubernetes/kubernetes/issues/17162)
+	flag.CommandLine.Parse([]string{})
 }
 
 func Execute() {
@@ -64,20 +70,39 @@ func Execute() {
 	}
 }
 
-func operator() {
+func operator(cmd *cobra.Command) {
 	// Get a config to talk to the apiserver
 	cfg, err := config.GetConfig()
 	if err != nil {
 		glog.Fatal(err)
 	}
 
+	if installCrds := viper.GetBool("installCrds"); installCrds {
+		glog.Info("Installing CRDs.")
+
+		tempDir, err := ioutil.TempDir("", "jenkins-operator")
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer os.RemoveAll(tempDir) // clean up
+
+		err = crds.RestoreAssets(tempDir, "")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		_, err = envtest.InstallCRDs(cfg, envtest.CRDInstallOptions{
+			Paths: []string{tempDir},
+		})
+	}
+
+	glog.Info("Registering Components.")
+
 	// Create a new Cmd to provide shared dependencies and start components
 	mgr, err := manager.New(cfg, manager.Options{})
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	glog.Info("Registering Components.")
 
 	// Setup Scheme for all resources
 	if err := apis.AddToScheme(mgr.GetScheme()); err != nil {

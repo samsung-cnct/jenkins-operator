@@ -30,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"net/url"
@@ -143,7 +142,7 @@ func (bc *ReconcileJenkinsPlugin) Reconcile(request reconcile.Request) (reconcil
 		return reconcile.Result{}, nil
 	}
 
-	jenkinsPluginName := instance.Spec.Name
+	jenkinsPluginName := instance.GetName()
 	if jenkinsPluginName == "" {
 		// We choose to absorb the error here as the worker would requeue the
 		// resource otherwise. Instead, the next time the resource is updated
@@ -154,16 +153,19 @@ func (bc *ReconcileJenkinsPlugin) Reconcile(request reconcile.Request) (reconcil
 
 	// Get the jenkins instance this plugin is intended for
 	jenkinsInstance := &jenkinsv1alpha1.JenkinsInstance{}
-	err = bc.Client.Get(context.TODO(), request.NamespacedName, jenkinsInstance)
+	err = bc.Client.Get(
+		context.TODO(),
+		types.NewNamespacedNameFromString(fmt.Sprintf("%s%c%s", request.Namespace, types.Separator, jenkinsInstanceName)),
+		jenkinsInstance)
 	if errors.IsNotFound(err) {
-		glog.Errorf("JenkinsInstance %s referred to by JenkinsPlugin % does not exist.", jenkinsInstanceName, instance.Name)
+		glog.Errorf("JenkinsInstance %s referred to by JenkinsPlugin % does not exist.", jenkinsInstanceName, instance.GetName())
 		return reconcile.Result{}, err
 	}
 
 	// make sure the jenkins instance is ready
 	// Otherwise re-queue
 	if jenkinsInstance.Status.Phase != "Ready" {
-		glog.Errorf("JenkinsInstance %s referred to by JenkinsPlugin % is not ready.", jenkinsInstanceName, instance.Name)
+		glog.Errorf("JenkinsInstance %s referred to by JenkinsPlugin % is not ready.", jenkinsInstanceName, instance.GetName())
 		return reconcile.Result{}, fmt.Errorf("JenkinsInstance %s not ready", jenkinsInstanceName)
 	}
 
@@ -177,7 +179,7 @@ func (bc *ReconcileJenkinsPlugin) Reconcile(request reconcile.Request) (reconcil
 	if errors.IsNotFound(err) {
 		glog.Errorf(
 			"JenkinsInstance %s referred to by JenkinsPlugin % is not ready: secret %s does not exist",
-			jenkinsInstanceName, instance.Name, jenkinsInstance.Spec.AdminSecret)
+			jenkinsInstanceName, instance.GetName(), jenkinsInstance.Spec.AdminSecret)
 		return reconcile.Result{}, err
 	}
 
@@ -186,7 +188,7 @@ func (bc *ReconcileJenkinsPlugin) Reconcile(request reconcile.Request) (reconcil
 	job := &batchv1.Job{}
 	err = bc.Client.Get(
 		context.TODO(),
-		types.NewNamespacedNameFromString(fmt.Sprintf("%s%c%s", request.Namespace, types.Separator, instance.Name)),
+		request.NamespacedName,
 		job)
 	// If the resource doesn't exist, we'll create it
 	if errors.IsNotFound(err) {
@@ -209,7 +211,7 @@ func (bc *ReconcileJenkinsPlugin) Reconcile(request reconcile.Request) (reconcil
 	// If the Job is not controlled by this JenkinsInstance resource, we should log
 	// a warning to the event recorder and return
 	if !metav1.IsControlledBy(job, instance) {
-		msg := fmt.Sprintf(MessageResourceExists, job.Name)
+		msg := fmt.Sprintf(MessageResourceExists, job.GetName())
 		bc.EventRecorder.Event(instance, corev1.EventTypeWarning, ErrResourceExists, msg)
 		return reconcile.Result{}, fmt.Errorf(msg)
 	}
@@ -249,7 +251,7 @@ func (bc *ReconcileJenkinsPlugin) Reconcile(request reconcile.Request) (reconcil
 func (bc *ReconcileJenkinsPlugin) newJob(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, jenkinsPlugin *jenkinsv1alpha1.JenkinsPlugin, setupSecret *corev1.Secret) (*batchv1.Job, error) {
 	labels := map[string]string{
 		"app":        "jenkinsci",
-		"controller": jenkinsPlugin.Name,
+		"controller": jenkinsPlugin.GetName(),
 		"component":  string(jenkinsPlugin.UID),
 	}
 
@@ -301,16 +303,9 @@ func (bc *ReconcileJenkinsPlugin) newJob(jenkinsInstance *jenkinsv1alpha1.Jenkin
 	var backoffLimit int32 = 3
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      jenkinsPlugin.Spec.Name,
-			Namespace: jenkinsPlugin.Namespace,
+			Name:      jenkinsPlugin.GetName(),
+			Namespace: jenkinsPlugin.GetNamespace(),
 			Labels:    labels,
-			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(jenkinsPlugin, schema.GroupVersionKind{
-					Group:   jenkinsv1alpha1.SchemeGroupVersion.Group,
-					Version: jenkinsv1alpha1.SchemeGroupVersion.Version,
-					Kind:    "JenkinsPlugin",
-				}),
-			},
 		},
 
 		Spec: batchv1.JobSpec{
@@ -318,7 +313,7 @@ func (bc *ReconcileJenkinsPlugin) newJob(jenkinsInstance *jenkinsv1alpha1.Jenkin
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:            jenkinsPlugin.Spec.Name,
+							Name:            jenkinsPlugin.GetName(),
 							Image:           "java:latest",
 							ImagePullPolicy: "IfNotPresent",
 							Command: []string{

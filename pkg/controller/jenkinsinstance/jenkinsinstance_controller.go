@@ -32,7 +32,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/record"
@@ -144,7 +143,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 					if inst.Spec.AdminSecret == a.Meta.GetName() {
 						keys = append(keys, reconcile.Request{
 							NamespacedName: types.NewNamespacedNameFromString(
-								fmt.Sprintf("%s%c%s", inst.Namespace, types.Separator, inst.Name)),
+								fmt.Sprintf("%s%c%s", inst.GetNamespace(), types.Separator, inst.Name)),
 						})
 					}
 				}
@@ -216,7 +215,7 @@ func (bc *ReconcileJenkinsInstance) Reconcile(request reconcile.Request) (reconc
 
 	// Get the setup utility secret managed by this controller
 	setupSecret := &corev1.Secret{}
-	err = bc.Client.Get(context.TODO(), request.NamespacedName, jenkinsInstance)
+	err = bc.Client.Get(context.TODO(), request.NamespacedName, setupSecret)
 	// If the resource doesn't exist, we'll create it
 	if errors.IsNotFound(err) {
 		setupSecret, err = bc.newSetupSecret(jenkinsInstance, adminSecret)
@@ -238,7 +237,7 @@ func (bc *ReconcileJenkinsInstance) Reconcile(request reconcile.Request) (reconc
 	// If the Secret is not controlled by this JenkinsInstance resource, we should log
 	// a warning to the event recorder and return
 	if !metav1.IsControlledBy(setupSecret, jenkinsInstance) {
-		msg := fmt.Sprintf(MessageResourceExists, setupSecret.Name)
+		msg := fmt.Sprintf(MessageResourceExists, setupSecret.GetName())
 		bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
 		return reconcile.Result{}, fmt.Errorf(msg)
 	}
@@ -267,7 +266,7 @@ func (bc *ReconcileJenkinsInstance) Reconcile(request reconcile.Request) (reconc
 	// If the Deployment is not controlled by this JenkinsInstance resource, we should log
 	// a warning to the event recorder and return
 	if !metav1.IsControlledBy(deployment, jenkinsInstance) {
-		msg := fmt.Sprintf(MessageResourceExists, deployment.Name)
+		msg := fmt.Sprintf(MessageResourceExists, deployment.GetName())
 		bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
 		return reconcile.Result{}, fmt.Errorf(msg)
 	}
@@ -296,7 +295,7 @@ func (bc *ReconcileJenkinsInstance) Reconcile(request reconcile.Request) (reconc
 	// If the Service is not controlled by this JenkinsInstance resource, we should log
 	// a warning to the event recorder and ret
 	if !metav1.IsControlledBy(service, jenkinsInstance) {
-		msg := fmt.Sprintf(MessageResourceExists, service.Name)
+		msg := fmt.Sprintf(MessageResourceExists, service.GetName())
 		bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
 		return reconcile.Result{}, fmt.Errorf(msg)
 	}
@@ -367,7 +366,7 @@ func (bc *ReconcileJenkinsInstance) updateJenkinsInstanceStatus(jenkinsInstance 
 	setupSecretCopy.Data["apiToken"] = []byte(apiToken)
 	err = bc.Client.Update(context.TODO(), setupSecretCopy)
 	if err != nil {
-		glog.Errorf("Error updating secret %s: %v", setupSecret.Name, err)
+		glog.Errorf("Error updating secret %s: %v", setupSecret.GetName(), err)
 		return err
 	}
 
@@ -378,7 +377,7 @@ func (bc *ReconcileJenkinsInstance) updateJenkinsInstanceStatus(jenkinsInstance 
 	}
 
 	jenkinsInstanceCopy.Status.Api = api
-	jenkinsInstanceCopy.Status.SetupSecret = setupSecretCopy.Name
+	jenkinsInstanceCopy.Status.SetupSecret = setupSecretCopy.GetName()
 	jenkinsInstanceCopy.Status.Phase = "Ready"
 
 	// Until #38113 is merged, we must use Update instead of UpdateStatus to
@@ -395,7 +394,7 @@ func (bc *ReconcileJenkinsInstance) updateJenkinsInstanceStatus(jenkinsInstance 
 func (bc *ReconcileJenkinsInstance) newSetupSecret(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, adminSecret *corev1.Secret) (*corev1.Secret, error) {
 	labels := map[string]string{
 		"app":        "jenkinsci",
-		"controller": jenkinsInstance.Name,
+		"controller": jenkinsInstance.GetName(),
 		"component":  string(jenkinsInstance.UID),
 	}
 
@@ -480,15 +479,8 @@ func (bc *ReconcileJenkinsInstance) newSetupSecret(jenkinsInstance *jenkinsv1alp
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jenkinsInstance.GetName(),
-			Namespace: jenkinsInstance.Namespace,
+			Namespace: jenkinsInstance.GetNamespace(),
 			Labels:    labels,
-			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(jenkinsInstance, schema.GroupVersionKind{
-					Group:   jenkinsv1alpha1.SchemeGroupVersion.Group,
-					Version: jenkinsv1alpha1.SchemeGroupVersion.Version,
-					Kind:    "JenkinsInstance",
-				}),
-			},
 		},
 		StringData: stringData,
 		Type:       corev1.SecretTypeOpaque,
@@ -508,22 +500,15 @@ func (bc *ReconcileJenkinsInstance) newSetupSecret(jenkinsInstance *jenkinsv1alp
 func (bc *ReconcileJenkinsInstance) newService(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) (*corev1.Service, error) {
 	labels := map[string]string{
 		"app":        "jenkinsci",
-		"controller": jenkinsInstance.Name,
+		"controller": jenkinsInstance.GetName(),
 		"component":  string(jenkinsInstance.UID),
 	}
 
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jenkinsInstance.GetName(),
-			Namespace: jenkinsInstance.Namespace,
+			Namespace: jenkinsInstance.GetNamespace(),
 			Labels:    labels,
-			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(jenkinsInstance, schema.GroupVersionKind{
-					Group:   jenkinsv1alpha1.SchemeGroupVersion.Group,
-					Version: jenkinsv1alpha1.SchemeGroupVersion.Version,
-					Kind:    "JenkinsInstance",
-				}),
-			},
 		},
 
 		Spec: corev1.ServiceSpec{
@@ -568,7 +553,7 @@ func (bc *ReconcileJenkinsInstance) newService(jenkinsInstance *jenkinsv1alpha1.
 func (bc *ReconcileJenkinsInstance) newDeployment(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) (*appsv1.Deployment, error) {
 	labels := map[string]string{
 		"app":        "jenkinsci",
-		"controller": jenkinsInstance.Name,
+		"controller": jenkinsInstance.GetName(),
 		"component":  string(jenkinsInstance.UID),
 	}
 
@@ -625,14 +610,7 @@ func (bc *ReconcileJenkinsInstance) newDeployment(jenkinsInstance *jenkinsv1alph
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jenkinsInstance.GetName(),
-			Namespace: jenkinsInstance.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(jenkinsInstance, schema.GroupVersionKind{
-					Group:   jenkinsv1alpha1.SchemeGroupVersion.Group,
-					Version: jenkinsv1alpha1.SchemeGroupVersion.Version,
-					Kind:    "JenkinsInstance",
-				}),
-			},
+			Namespace: jenkinsInstance.GetNamespace(),
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: jenkinsInstance.Spec.Replicas,

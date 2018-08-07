@@ -30,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"net/url"
@@ -163,16 +162,19 @@ func (bc *ReconcileJenkinsJob) Reconcile(request reconcile.Request) (reconcile.R
 
 	// Get the jenkins instance this plugin is intended for
 	jenkinsInstance := &jenkinsv1alpha1.JenkinsInstance{}
-	err = bc.Client.Get(context.TODO(), request.NamespacedName, jenkinsInstance)
+	err = bc.Client.Get(
+		context.TODO(),
+		types.NewNamespacedNameFromString(fmt.Sprintf("%s%c%s", request.Namespace, types.Separator, jenkinsInstanceName)),
+		jenkinsInstance)
 	if errors.IsNotFound(err) {
-		glog.Errorf("JenkinsInstance %s referred to by JenkinsJob % does not exist.", jenkinsInstanceName, instance.Name)
+		glog.Errorf("JenkinsInstance %s referred to by JenkinsJob %s does not exist.", jenkinsInstanceName, instance.GetName())
 		return reconcile.Result{}, err
 	}
 
 	// make sure the jenkins instance is ready
 	// Otherwise re-queue
 	if jenkinsInstance.Status.Phase != "Ready" {
-		glog.Errorf("JenkinsInstance %s referred to by JenkinsJob % is not ready.", jenkinsInstanceName, instance.Name)
+		glog.Errorf("JenkinsInstance %s referred to by JenkinsJob % is not ready.", jenkinsInstanceName, instance.GetName())
 		return reconcile.Result{}, fmt.Errorf("JenkinsInstance %s not ready", jenkinsInstanceName)
 	}
 
@@ -186,7 +188,7 @@ func (bc *ReconcileJenkinsJob) Reconcile(request reconcile.Request) (reconcile.R
 	if errors.IsNotFound(err) {
 		glog.Errorf(
 			"JenkinsInstance %s referred to by JenkinsJob % is not ready: secret %s does not exist",
-			jenkinsInstanceName, instance.Name, jenkinsInstance.Spec.AdminSecret)
+			jenkinsInstanceName, instance.GetName(), jenkinsInstance.Spec.AdminSecret)
 		return reconcile.Result{}, err
 	}
 
@@ -195,7 +197,7 @@ func (bc *ReconcileJenkinsJob) Reconcile(request reconcile.Request) (reconcile.R
 	job := &batchv1.Job{}
 	err = bc.Client.Get(
 		context.TODO(),
-		types.NewNamespacedNameFromString(fmt.Sprintf("%s%c%s", request.Namespace, types.Separator, instance.Name)),
+		request.NamespacedName,
 		job)
 	// If the resource doesn't exist, we'll create it
 	if errors.IsNotFound(err) {
@@ -218,7 +220,7 @@ func (bc *ReconcileJenkinsJob) Reconcile(request reconcile.Request) (reconcile.R
 	// If the Job is not controlled by this JenkinsInstance resource, we should log
 	// a warning to the event recorder and return
 	if !metav1.IsControlledBy(job, instance) {
-		msg := fmt.Sprintf(MessageResourceExists, job.Name)
+		msg := fmt.Sprintf(MessageResourceExists, job.GetName())
 		bc.EventRecorder.Event(instance, corev1.EventTypeWarning, ErrResourceExists, msg)
 		return reconcile.Result{}, fmt.Errorf(msg)
 	}
@@ -258,7 +260,7 @@ func (bc *ReconcileJenkinsJob) Reconcile(request reconcile.Request) (reconcile.R
 func (bc *ReconcileJenkinsJob) newJob(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, jenkinsJob *jenkinsv1alpha1.JenkinsJob, setupSecret *corev1.Secret) (*batchv1.Job, error) {
 	labels := map[string]string{
 		"app":        "jenkinsci",
-		"controller": jenkinsJob.Name,
+		"controller": jenkinsJob.GetName(),
 		"component":  string(jenkinsJob.UID),
 	}
 
@@ -281,7 +283,7 @@ func (bc *ReconcileJenkinsJob) newJob(jenkinsInstance *jenkinsv1alpha1.JenkinsIn
 
 	jobInfo := JobInfo{
 		Api:     apiUrl.String(),
-		JobName: jenkinsJob.Name,
+		JobName: jenkinsJob.GetName(),
 		JobXml:  jenkinsJobXml,
 		JobDsl:  jenkinsJobDsl,
 	}
@@ -320,16 +322,9 @@ func (bc *ReconcileJenkinsJob) newJob(jenkinsInstance *jenkinsv1alpha1.JenkinsIn
 	var backoffLimit int32 = 3
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      jenkinsJob.Name,
-			Namespace: jenkinsJob.Namespace,
+			Name:      jenkinsJob.GetName(),
+			Namespace: jenkinsJob.GetNamespace(),
 			Labels:    labels,
-			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(jenkinsJob, schema.GroupVersionKind{
-					Group:   jenkinsv1alpha1.SchemeGroupVersion.Group,
-					Version: jenkinsv1alpha1.SchemeGroupVersion.Version,
-					Kind:    "JenkinsJob",
-				}),
-			},
 		},
 
 		Spec: batchv1.JobSpec{
@@ -337,7 +332,7 @@ func (bc *ReconcileJenkinsJob) newJob(jenkinsInstance *jenkinsv1alpha1.JenkinsIn
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:            jenkinsJob.Name,
+							Name:            jenkinsJob.GetName(),
 							Image:           "java:latest",
 							ImagePullPolicy: "IfNotPresent",
 							Command: []string{

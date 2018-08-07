@@ -24,8 +24,6 @@ spec:
           properties:
             jenkinsinstance:
               type: string
-            name:
-              type: string
             pluginconfig:
               type: string
             pluginid:

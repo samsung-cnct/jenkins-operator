@@ -68,6 +68,7 @@ deploy: manifests
 # Generate manifests e.g. CRD, RBAC etc.
 manifests:
 	go run vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go all
+	go-bindata -o $(PROJECTDIR)/config/crds/data.go -ignore data\\.go -pkg crds -prefix $(PROJECTDIR)/config/crds $(PROJECTDIR)/config/crds/...
 
 # Run go fmt against code
 fmt:
