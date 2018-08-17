@@ -1114,6 +1114,15 @@ func (bc *ReconcileJenkinsInstance) newDeployment(jenkinsInstance *jenkinsv1alph
 		},
 	}
 
+	// assign service account if needed
+	if jenkinsInstance.Spec.ServiceAccount != nil {
+		serviceAccountName := jenkinsInstance.GetName()
+		if jenkinsInstance.Spec.ServiceAccount.Name != "" {
+			serviceAccountName = jenkinsInstance.Spec.ServiceAccount.Name
+		}
+		deployment.Spec.Template.Spec.ServiceAccountName = serviceAccountName
+	}
+
 	err = controllerutil.SetControllerReference(jenkinsInstance, deployment, bc.scheme)
 	if err != nil {
 		return nil, err
