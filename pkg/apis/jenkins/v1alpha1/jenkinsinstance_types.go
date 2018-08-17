@@ -31,6 +31,61 @@ type PluginSpec struct {
 	Version string `json:"version,omitempty"`
 }
 
+type ServiceSpec struct {
+	// Jenkins service name
+	Name string `json:"name,omitempty"`
+
+	// Jenkins instance service type
+	ServiceType corev1.ServiceType `json:"servicetype,omitempty"`
+
+	// Jenkins service annotations
+	Annotations map[string]string `json:"annotations,omitempty"`
+}
+
+type IngressSpec struct {
+
+	// Jenkins ingress annotations
+	Annotations map[string]string `json:"annotations,omitempty"`
+
+	// Jenkins ingress tls secret
+	TlsSecret string `json:"tlssecret,omitempty"`
+
+	// Jenkins service name, if pre-existing
+	Service string `json:"service,omitempty"`
+
+	// Ingress backend path
+	Path string `json:"path,omitempty"`
+}
+
+type RbacSpec struct {
+
+	// Name of pre-existing cluster role to bind service account to
+	Clusterrole string `json:"clusterrole,omitempty"`
+}
+
+type StorageSpec struct {
+	// Name of pre-existing (or not) PVC for jobs
+	JobsPvc string `json:"jobspvc,omitempty"`
+
+	// If PVC is to be created, what is its spec
+	JobsPvcSpec *corev1.PersistentVolumeClaimSpec `json:"jobspvcspec,omitempty"`
+}
+
+type ServiceAccountSpec struct {
+	// Jenkins service account name
+	Name string `json:"name,omitempty"`
+
+	// Secrets is the list of secrets allowed to be used by pods running using this ServiceAccount.
+	Secrets []corev1.ObjectReference `json:"secrets,omitempty"`
+
+	// ImagePullSecrets is a list of references to secrets in the same namespace to use for pulling any images
+	// in pods that reference this ServiceAccount.
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+
+	// AutomountServiceAccountToken indicates whether pods running as this service account should have an API token automatically mounted.
+	AutomountServiceAccountToken *bool `json:"automountServiceAccountToken,omitempty"`
+}
+
 // JenkinsInstanceSpec defines the desired state of JenkinsInstance
 type JenkinsInstanceSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
@@ -45,11 +100,8 @@ type JenkinsInstanceSpec struct {
 	// Array of plugin configurations
 	Plugins []PluginSpec `json:"plugins,omitempty"`
 
-	// Jenkins master port
-	MasterPort int32 `json:"masterport,omitempty"`
-
-	// Jenkins agent port
-	AgentPort int32 `json:"agentport,omitempty"`
+	// Jenkins deployment annotations
+	Annotations map[string]string `json:"annotations,omitempty"`
 
 	// How many executors
 	Executors int32 `json:"executors,omitempty"`
@@ -59,23 +111,29 @@ type JenkinsInstanceSpec struct {
 	// Groovy configuration scripts
 	Config string `json:"config,omitempty"`
 
-	// Number of replicas
-	Replicas *int32 `json:"replicas,omitempty"`
-
-	// Image pull policy
-	PullPolicy corev1.PullPolicy `json:"pullpolicy,omitempty"`
-
-	// Jenkins instance service type
-	ServiceType corev1.ServiceType `json:"servicetype,omitempty"`
-
 	// Jenkins location
 	Location string `json:"location,omitempty"`
 
 	// Jenkins admin email
 	AdminEmail string `json:"adminemail,omitempty"`
 
-	// Name of pre-existing PVC for jobs
-	JobsPvc string `json:"jobspvc,omitempty"`
+	// Jenkins service options
+	Service *ServiceSpec `json:"service,omitempty"`
+
+	// Jenkins ingress options
+	Ingress *IngressSpec `json:"ingress,omitempty"`
+
+	// Service account spec for jenkins to run under
+	ServiceAccount *ServiceAccountSpec `json:"serviceaccount,omitempty"`
+
+	// Jenkins rbac options
+	Rbac *RbacSpec `json:"rbac,omitempty"`
+
+	// Create a network policy
+	NetworkPolicy bool `json:"networkpolicy,omitempty"`
+
+	// Jenkins storage options
+	Storage *StorageSpec `json:"storage,omitempty"`
 }
 
 // JenkinsInstanceStatus defines the observed state of JenkinsInstance

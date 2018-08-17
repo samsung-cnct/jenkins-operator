@@ -9,16 +9,38 @@ spec:
   name: operatedjenkins
   env:
     SOME_ENV: "test"
-  masterport: 8080
-  agentport: 50000
-  executors: 2
-  replicas: 1
   plugins:
     - id: greenballs
       version: "1.15"
-  pullpolicy: Always
-  servicetype: NodePort
+  annotations:
+    cnct.io/annotation: "test"
+    cnct.io/other-annotation: "other test"
+  executors: 2
+  replicas: 1
   adminsecret: jenkins-test
-  jobspvc: jenkins-test
   location: https://jenkins.example.com
   adminemail: admin@example.com
+  service:
+    name: jenkins
+    servicetype: NodePort
+    annotations:
+      cnct.io/service-annotation: "test"
+      cnct.io/other-service-annotation: "other test"
+  ingress:
+    annotations:
+      cnct.io/ingress-annotation: "test"
+      cnct.io/other-ingress-annotation: "other test"
+    service: jenkins
+    path: /
+  serviceaccount:
+    name: jenkins
+  networkpolicy: true
+  storage:
+    jobspvc: jenkins
+    jobspvcspec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+

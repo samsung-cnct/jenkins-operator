@@ -28,6 +28,9 @@ import (
 	"gopkg.in/matryer/try.v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/api/extensions/v1beta1"
+	netv1 "k8s.io/api/networking/v1"
+	authv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -60,6 +63,13 @@ const (
 	// MessageResourceSynced is the message used for an Event fired when a JenkinsInstance
 	// is synced successfully
 	MessageResourceSynced = "JenkinsInstance synced successfully"
+)
+
+const (
+	JenkinsMasterPort = 8080
+	JenkinsAgentPort  = 50000
+	JenkinsReplicas   = 1
+	JenkinsPullPolicy = "Always"
 )
 
 // Add creates a new JenkinsInstance Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
@@ -174,6 +184,10 @@ type ReconcileJenkinsInstance struct {
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=extensions,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=rbac,resources=clusterrolebindings,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=networking,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=jenkins.jenkinsoperator.maratoid.github.com,resources=jenkinsinstances,verbs=get;list;watch;create;update;patch;delete
 func (bc *ReconcileJenkinsInstance) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	jenkinsInstance := &jenkinsv1alpha1.JenkinsInstance{}
@@ -184,15 +198,6 @@ func (bc *ReconcileJenkinsInstance) Reconcile(request reconcile.Request) (reconc
 			return reconcile.Result{}, nil
 		}
 		return reconcile.Result{}, err
-	}
-
-	baseName := jenkinsInstance.GetName()
-	if baseName == "" {
-		// We choose to absorb the error here as the worker would requeue the
-		// resource otherwise. Instead, the next time the resource is updated
-		// the resource will be queued again.
-		glog.Errorf("%s: deployment name must be specified", request.String())
-		return reconcile.Result{}, nil
 	}
 
 	adminSecretName := jenkinsInstance.Spec.AdminSecret
@@ -214,18 +219,7 @@ func (bc *ReconcileJenkinsInstance) Reconcile(request reconcile.Request) (reconc
 	}
 
 	// Get the setup utility secret managed by this controller
-	setupSecret := &corev1.Secret{}
-	err = bc.Client.Get(context.TODO(), request.NamespacedName, setupSecret)
-	// If the resource doesn't exist, we'll create it
-	if errors.IsNotFound(err) {
-		setupSecret, err = bc.newSetupSecret(jenkinsInstance, adminSecret)
-		if err != nil {
-			glog.Errorf("Error creating setup secret object: %s", err)
-			return reconcile.Result{}, err
-		}
-		err = bc.Client.Create(context.TODO(), setupSecret)
-	}
-
+	setupSecret, err := bc.newSetupSecret(jenkinsInstance, adminSecret)
 	// If an error occurs during Get/Create, we'll requeue the item so we can
 	// attempt processing again later. This could have been caused by a
 	// temporary network failure, or any other transient reason.
@@ -234,27 +228,17 @@ func (bc *ReconcileJenkinsInstance) Reconcile(request reconcile.Request) (reconc
 		return reconcile.Result{}, err
 	}
 
-	// If the Secret is not controlled by this JenkinsInstance resource, we should log
-	// a warning to the event recorder and return
-	if !metav1.IsControlledBy(setupSecret, jenkinsInstance) {
-		msg := fmt.Sprintf(MessageResourceExists, setupSecret.GetName())
-		bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
-		return reconcile.Result{}, fmt.Errorf(msg)
+	// Get the service account with the name specified in JenkinsInstance.spec
+	_, err = bc.newServiceAccount(jenkinsInstance)
+	// If an error occurs during Get/Create, we'll requeue the item so we can
+	// attempt processing again later. This could have been caused by a
+	// temporary network failure, or any other transient reason.
+	if err != nil {
+		glog.Errorf("Error creating serviceaccount: %s", err)
+		return reconcile.Result{}, err
 	}
 
-	// Get the deployment with the name specified in JenkinsInstance.spec
-	deployment := &appsv1.Deployment{}
-	err = bc.Client.Get(context.TODO(), request.NamespacedName, deployment)
-	// If the resource doesn't exist, we'll create it
-	if errors.IsNotFound(err) {
-		deployment, err = bc.newDeployment(jenkinsInstance)
-		if err != nil {
-			glog.Errorf("Error creating deployment object: %s", err)
-			return reconcile.Result{}, err
-		}
-		err = bc.Client.Create(context.TODO(), deployment)
-	}
-
+	deployment, err := bc.newDeployment(jenkinsInstance)
 	// If an error occurs during Get/Create, we'll requeue the item so we can
 	// attempt processing again later. This could have been caused by a
 	// temporary network failure, or any other transient reason.
@@ -263,27 +247,7 @@ func (bc *ReconcileJenkinsInstance) Reconcile(request reconcile.Request) (reconc
 		return reconcile.Result{}, err
 	}
 
-	// If the Deployment is not controlled by this JenkinsInstance resource, we should log
-	// a warning to the event recorder and return
-	if !metav1.IsControlledBy(deployment, jenkinsInstance) {
-		msg := fmt.Sprintf(MessageResourceExists, deployment.GetName())
-		bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
-		return reconcile.Result{}, fmt.Errorf(msg)
-	}
-
-	// Get the service with the name specified in JenkinsInstance.spec
-	service := &corev1.Service{}
-	err = bc.Client.Get(context.TODO(), request.NamespacedName, service)
-	// If the resource doesn't exist, we'll create it
-	if errors.IsNotFound(err) {
-		service, err = bc.newService(jenkinsInstance)
-		if err != nil {
-			glog.Errorf("Error creating service object: %s", err)
-			return reconcile.Result{}, err
-		}
-		err = bc.Client.Create(context.TODO(), service)
-	}
-
+	service, err := bc.newService(jenkinsInstance)
 	// If an error occurs during Get/Create, we'll requeue the item so we can
 	// attempt processing again later. This could have been caused by a
 	// temporary network failure, or any other transient reason.
@@ -292,17 +256,38 @@ func (bc *ReconcileJenkinsInstance) Reconcile(request reconcile.Request) (reconc
 		return reconcile.Result{}, err
 	}
 
-	// If the Service is not controlled by this JenkinsInstance resource, we should log
-	// a warning to the event recorder and ret
-	if !metav1.IsControlledBy(service, jenkinsInstance) {
-		msg := fmt.Sprintf(MessageResourceExists, service.GetName())
-		bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
-		return reconcile.Result{}, fmt.Errorf(msg)
+	// Get the ingress with the name specified in JenkinsInstance.spec
+	_, err = bc.newIngress(jenkinsInstance)
+	// If an error occurs during Get/Create, we'll requeue the item so we can
+	// attempt processing again later. This could have been caused by a
+	// temporary network failure, or any other transient reason.
+	if err != nil {
+		glog.Errorf("Error creating ingress: %s", err)
+		return reconcile.Result{}, err
 	}
 
-	// Update the Deployment iff its observed Spec does
-	// TODO: consider other changes besides replicas number
-	if jenkinsInstance.Spec.Replicas != nil && *jenkinsInstance.Spec.Replicas != *deployment.Spec.Replicas {
+	// Setup RBAC with the names specified in JenkinsInstance.spec
+	_, err = bc.newRoleBinding(jenkinsInstance)
+	// If an error occurs during Get/Create, we'll requeue the item so we can
+	// attempt processing again later. This could have been caused by a
+	// temporary network failure, or any other transient reason.
+	if err != nil {
+		glog.Errorf("Error creating role binding: %s", err)
+		return reconcile.Result{}, err
+	}
+
+	// Setup Network policy if specified in JenkinsInstance.spec
+	_, err = bc.newNetworkPolicy(jenkinsInstance)
+	// If an error occurs during Get/Create, we'll requeue the item so we can
+	// attempt processing again later. This could have been caused by a
+	// temporary network failure, or any other transient reason.
+	if err != nil {
+		glog.Errorf("Error creating network policy: %s", err)
+		return reconcile.Result{}, err
+	}
+
+	// TODO: Update all the components created by the controller if needed
+	/*if jenkinsInstance.Spec.Replicas != nil && *jenkinsInstance.Spec.Replicas != *deployment.Spec.Replicas {
 		glog.V(4).Infof(
 			"jenkinsInstance %s replicas: %d, deployment replicas: %d",
 			baseName, *jenkinsInstance.Spec.Replicas,
@@ -315,15 +300,13 @@ func (bc *ReconcileJenkinsInstance) Reconcile(request reconcile.Request) (reconc
 		err = bc.Client.Update(context.TODO(), deployment)
 	}
 
-	// TODO: Update the Service iff its observed Spec does
-
 	// If an error occurs during Update, we'll requeue the item so we can
 	// attempt processing again later. This could have been caused by a
 	// temporary network failure, or any other transient reason.
 	if err != nil {
 		glog.Errorf("Error creating deployment: %s", err)
 		return reconcile.Result{}, err
-	}
+	}*/
 
 	// Finally, we update the status block of the JenkinsInstance resource to reflect the
 	// current state of the world
@@ -348,7 +331,7 @@ func (bc *ReconcileJenkinsInstance) updateJenkinsInstanceStatus(jenkinsInstance 
 
 		// use admin secret data to get the user configuration page and parse out an api token
 		var err error
-		apiToken, err = util.GetJenkinsApiToken(jenkinsInstance, service, adminSecret)
+		apiToken, err = util.GetJenkinsApiToken(jenkinsInstance, service, adminSecret, JenkinsMasterPort)
 		if err != nil {
 			glog.Errorf("Error: %v, retrying", err)
 			time.Sleep(10 * time.Second) // wait 10 seconds
@@ -392,6 +375,29 @@ func (bc *ReconcileJenkinsInstance) updateJenkinsInstanceStatus(jenkinsInstance 
 // the appropriate OwnerReferences on the resource so handleObject can discover
 // the JenkinsInstance resource that 'owns' it.
 func (bc *ReconcileJenkinsInstance) newSetupSecret(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, adminSecret *corev1.Secret) (*corev1.Secret, error) {
+	setupSecret := &corev1.Secret{}
+	err := bc.Client.Get(
+		context.TODO(), types.NewNamespacedNameFromString(
+			fmt.Sprintf("%s%c%s", jenkinsInstance.GetNamespace(), types.Separator,
+				jenkinsInstance.GetName())),
+		setupSecret)
+	// If the resource doesn't exist, we'll create it
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return nil, err
+		}
+	} else {
+		// If the Secret is not controlled by this JenkinsInstance resource, we should log
+		// a warning to the event recorder and return
+		if !metav1.IsControlledBy(setupSecret, jenkinsInstance) {
+			msg := fmt.Sprintf(MessageResourceExists, setupSecret.GetName())
+			bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
+			return setupSecret, fmt.Errorf(msg)
+		}
+
+		return setupSecret, nil
+	}
+
 	labels := map[string]string{
 		"app":        "jenkinsci",
 		"controller": jenkinsInstance.GetName(),
@@ -424,7 +430,7 @@ func (bc *ReconcileJenkinsInstance) newSetupSecret(jenkinsInstance *jenkinsv1alp
 		Password:   string(adminPassword[:]),
 		Url:        jenkinsInstance.Spec.Location,
 		AdminEmail: jenkinsInstance.Spec.AdminEmail,
-		AgentPort:  jenkinsInstance.Spec.AgentPort,
+		AgentPort:  JenkinsAgentPort,
 		Executors:  jenkinsInstance.Spec.Executors,
 	}
 
@@ -476,7 +482,7 @@ func (bc *ReconcileJenkinsInstance) newSetupSecret(jenkinsInstance *jenkinsv1alp
 		"user":                    adminUser,
 	}
 
-	secret := &corev1.Secret{
+	setupSecret = &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jenkinsInstance.GetName(),
 			Namespace: jenkinsInstance.GetNamespace(),
@@ -486,27 +492,56 @@ func (bc *ReconcileJenkinsInstance) newSetupSecret(jenkinsInstance *jenkinsv1alp
 		Type:       corev1.SecretTypeOpaque,
 	}
 
-	err = controllerutil.SetControllerReference(jenkinsInstance, secret, bc.scheme)
+	err = controllerutil.SetControllerReference(jenkinsInstance, setupSecret, bc.scheme)
 	if err != nil {
 		return nil, err
 	}
 
-	return secret, nil
+	err = bc.Client.Create(context.TODO(), setupSecret)
+	return setupSecret, err
 }
 
 // newService creates a new Service for a JenkinsInstance resource. It also sets
 // the appropriate OwnerReferences on the resource so handleObject can discover
 // the JenkinsInstance resource that 'owns' it.
 func (bc *ReconcileJenkinsInstance) newService(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) (*corev1.Service, error) {
+	// Get the service with the name specified in JenkinsInstance.spec
+	serviceName := jenkinsInstance.GetName()
+	if jenkinsInstance.Spec.Service != nil && jenkinsInstance.Spec.Service.Name != "" {
+		serviceName = jenkinsInstance.Spec.Service.Name
+	}
+	service := &corev1.Service{}
+	err := bc.Client.Get(
+		context.TODO(),
+		types.NewNamespacedNameFromString(
+			fmt.Sprintf("%s%c%s", jenkinsInstance.GetNamespace(), types.Separator, serviceName)),
+		service)
+	// If the resource doesn't exist, we'll create it
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return nil, err
+		}
+	} else {
+		// If the Service is not controlled by this JenkinsInstance resource, we should log
+		// a warning to the event recorder and ret
+		if !metav1.IsControlledBy(service, jenkinsInstance) {
+			msg := fmt.Sprintf(MessageResourceExists, service.GetName())
+			bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
+			return service, fmt.Errorf(msg)
+		}
+
+		return service, nil
+	}
+
 	labels := map[string]string{
 		"app":        "jenkinsci",
 		"controller": jenkinsInstance.GetName(),
 		"component":  string(jenkinsInstance.UID),
 	}
 
-	service := &corev1.Service{
+	service = &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      jenkinsInstance.GetName(),
+			Name:      serviceName,
 			Namespace: jenkinsInstance.GetNamespace(),
 			Labels:    labels,
 		},
@@ -516,41 +551,420 @@ func (bc *ReconcileJenkinsInstance) newService(jenkinsInstance *jenkinsv1alpha1.
 				{
 					Name:     "master",
 					Protocol: "TCP",
-					Port:     jenkinsInstance.Spec.MasterPort,
+					Port:     JenkinsMasterPort,
 					TargetPort: intstr.IntOrString{
 						Type:   intstr.Int,
-						IntVal: jenkinsInstance.Spec.MasterPort,
+						IntVal: JenkinsMasterPort,
 					},
 				},
 				{
 					Name:     "agent",
 					Protocol: "TCP",
-					Port:     jenkinsInstance.Spec.AgentPort,
+					Port:     JenkinsAgentPort,
 					TargetPort: intstr.IntOrString{
 						Type:   intstr.Int,
-						IntVal: jenkinsInstance.Spec.AgentPort,
+						IntVal: JenkinsAgentPort,
 					},
 				},
 			},
 			Selector: map[string]string{
 				"component": string(jenkinsInstance.UID),
 			},
-			Type: jenkinsInstance.Spec.ServiceType,
 		},
 	}
 
-	err := controllerutil.SetControllerReference(jenkinsInstance, service, bc.scheme)
+	if jenkinsInstance.Spec.Service != nil {
+		service.ObjectMeta.Annotations = jenkinsInstance.Spec.Service.Annotations
+		if jenkinsInstance.Spec.Service.ServiceType != "" {
+			service.Spec.Type = jenkinsInstance.Spec.Service.ServiceType
+		}
+	}
+
+	err = controllerutil.SetControllerReference(jenkinsInstance, service, bc.scheme)
 	if err != nil {
 		return nil, err
 	}
 
+	err = bc.Client.Create(context.TODO(), service)
 	return service, nil
+}
+
+// newIngress creates a new Ingress for a JenkinsInstance resource. It also sets
+// the appropriate OwnerReferences on the resource so handleObject can discover
+// the JenkinsInstance resource that 'owns' it.
+func (bc *ReconcileJenkinsInstance) newIngress(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) (*v1beta1.Ingress, error) {
+	if jenkinsInstance.Spec.Ingress == nil {
+		return nil, nil
+	}
+
+	ingress := &v1beta1.Ingress{}
+	err := bc.Client.Get(
+		context.TODO(),
+		types.NewNamespacedNameFromString(
+			fmt.Sprintf("%s%c%s", jenkinsInstance.GetNamespace(), types.Separator, jenkinsInstance.GetName())),
+		ingress)
+	// If the ingress doesn't exist, we'll create it
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return nil, err
+		}
+	} else {
+		// If the Ingress is not controlled by this JenkinsInstance resource, we should log
+		// a warning to the event recorder and ret
+		if !metav1.IsControlledBy(ingress, jenkinsInstance) {
+			msg := fmt.Sprintf(MessageResourceExists, ingress.GetName())
+			bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
+			return ingress, fmt.Errorf(msg)
+		}
+
+		return ingress, nil
+	}
+
+	labels := map[string]string{
+		"app":        "jenkinsci",
+		"controller": jenkinsInstance.GetName(),
+		"component":  string(jenkinsInstance.UID),
+	}
+
+	serviceName := jenkinsInstance.GetName()
+	if jenkinsInstance.Spec.Service != nil && jenkinsInstance.Spec.Service.Name != "" {
+		serviceName = jenkinsInstance.Spec.Service.Name
+	}
+	if jenkinsInstance.Spec.Ingress.Service != "" {
+		serviceName = jenkinsInstance.Spec.Ingress.Service
+	}
+
+	ingressPath := jenkinsInstance.Spec.Ingress.Path
+	if ingressPath == "" {
+		ingressPath = "/"
+	}
+
+	ingress = &v1beta1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        jenkinsInstance.GetName(),
+			Namespace:   jenkinsInstance.GetNamespace(),
+			Labels:      labels,
+			Annotations: jenkinsInstance.Spec.Ingress.Annotations,
+		},
+		Spec: v1beta1.IngressSpec{
+			TLS: []v1beta1.IngressTLS{
+				{
+					SecretName: jenkinsInstance.Spec.Ingress.TlsSecret,
+					Hosts: []string{
+						util.GetJenkinsLocationHost(jenkinsInstance),
+					},
+				},
+			},
+			Rules: []v1beta1.IngressRule{
+				{
+					Host: util.GetJenkinsLocationHost(jenkinsInstance),
+					IngressRuleValue: v1beta1.IngressRuleValue{
+						HTTP: &v1beta1.HTTPIngressRuleValue{
+							Paths: []v1beta1.HTTPIngressPath{
+								{
+									Path: ingressPath,
+									Backend: v1beta1.IngressBackend{
+										ServiceName: serviceName,
+										ServicePort: intstr.IntOrString{
+											Type:   intstr.Int,
+											IntVal: JenkinsMasterPort,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	err = controllerutil.SetControllerReference(jenkinsInstance, ingress, bc.scheme)
+	if err != nil {
+		return nil, err
+	}
+
+	err = bc.Client.Create(context.TODO(), ingress)
+	return ingress, err
+}
+
+// newRoleBinding creates role bindings for a JenkinsInstance. It also sets
+// the appropriate OwnerReferences on the resources so handleObject can discover
+// the JenkinsInstance resource that 'owns' it.
+func (bc *ReconcileJenkinsInstance) newRoleBinding(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) (*authv1.ClusterRoleBinding, error) {
+	if jenkinsInstance.Spec.Rbac == nil {
+		return nil, nil
+	}
+
+	binding := &authv1.ClusterRoleBinding{}
+	err := bc.Client.Get(
+		context.TODO(),
+		types.NewNamespacedNameFromString(
+			fmt.Sprintf("%s%c%s", jenkinsInstance.GetNamespace(), types.Separator, jenkinsInstance.GetName())),
+		binding)
+	// If the binding doesn't exist, we'll create it
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return nil, err
+		}
+	} else {
+		// If the role binding is not controlled by this JenkinsInstance resource, we should log
+		// a warning to the event recorder and ret
+		if !metav1.IsControlledBy(binding, jenkinsInstance) {
+			msg := fmt.Sprintf(MessageResourceExists, binding.GetName())
+			bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
+			return binding, fmt.Errorf(msg)
+		}
+
+		return binding, nil
+	}
+
+	labels := map[string]string{
+		"app":        "jenkinsci",
+		"controller": jenkinsInstance.GetName(),
+		"component":  string(jenkinsInstance.UID),
+	}
+
+	if jenkinsInstance.Spec.Rbac.Clusterrole == "" {
+		return nil, fmt.Errorf("RBAC is enabled but there is no clusterrole specified")
+	}
+	clusterrole := &authv1.ClusterRole{}
+	err = bc.Client.Get(context.TODO(), types.NewNamespacedNameFromString(
+		fmt.Sprintf(
+			"%s%c%s",
+			jenkinsInstance.Namespace,
+			types.Separator,
+			jenkinsInstance.Spec.Rbac.Clusterrole)),
+		clusterrole)
+	if err != nil {
+		glog.Error("RBAC is enabled but could not find specified cluster role")
+		return nil, err
+	}
+
+	if jenkinsInstance.Spec.ServiceAccount == nil {
+		return nil, fmt.Errorf("RBAC is enabled, but JenkinsInstance serviceaccount is not specified")
+	}
+
+	serviceAccountName := jenkinsInstance.GetName()
+	if jenkinsInstance.Spec.ServiceAccount.Name != "" {
+		serviceAccountName = jenkinsInstance.Spec.ServiceAccount.Name
+	}
+
+	serviceaccount := &corev1.ServiceAccount{}
+	err = bc.Client.Get(context.TODO(), types.NewNamespacedNameFromString(
+		fmt.Sprintf(
+			"%s%c%s",
+			jenkinsInstance.Namespace,
+			types.Separator,
+			serviceAccountName)),
+		serviceaccount)
+	if err != nil {
+		glog.Error("RBAC is enabled but could not find specified service account %s", serviceAccountName)
+		return nil, err
+	}
+
+	binding = &authv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      jenkinsInstance.GetName(),
+			Namespace: jenkinsInstance.GetNamespace(),
+			Labels:    labels,
+		},
+		Subjects: []authv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      serviceAccountName,
+				Namespace: jenkinsInstance.Namespace,
+			},
+		},
+		RoleRef: authv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "ClusterRole",
+			Name:     jenkinsInstance.Spec.Rbac.Clusterrole,
+		},
+	}
+
+	err = controllerutil.SetControllerReference(jenkinsInstance, binding, bc.scheme)
+	if err != nil {
+		glog.Error("Could not set controller reference on JenkinsInstance RoleBinding")
+		return nil, err
+	}
+
+	err = bc.Client.Create(context.TODO(), binding)
+	return binding, err
+}
+
+// newServiceAccount creates a service account (if needed) for a JenkinsInstance. It also sets
+// the appropriate OwnerReferences on the resources so handleObject can discover
+// the JenkinsInstance resource that 'owns' it.
+func (bc *ReconcileJenkinsInstance) newServiceAccount(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) (*corev1.ServiceAccount, error) {
+	if jenkinsInstance.Spec.ServiceAccount == nil {
+		glog.Warningf("No service account spec present for JenkinsInstance %s", jenkinsInstance.GetName())
+		return nil, nil
+	}
+
+	serviceAccountName := jenkinsInstance.GetName()
+	if jenkinsInstance.Spec.ServiceAccount.Name != "" {
+		serviceAccountName = jenkinsInstance.Spec.ServiceAccount.Name
+	}
+	serviceAccount := &corev1.ServiceAccount{}
+	err := bc.Client.Get(
+		context.TODO(),
+		types.NewNamespacedNameFromString(
+			fmt.Sprintf("%s%c%s", jenkinsInstance.GetNamespace(), types.Separator,
+				serviceAccountName)),
+		serviceAccount)
+
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return nil, err
+		}
+	} else {
+		if !metav1.IsControlledBy(serviceAccount, jenkinsInstance) {
+			msg := fmt.Sprintf(MessageResourceExists, serviceAccountName)
+			bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
+			return serviceAccount, fmt.Errorf(msg)
+		}
+
+		return serviceAccount, nil
+	}
+
+	// create service account
+	labels := map[string]string{
+		"app":        "jenkinsci",
+		"controller": jenkinsInstance.GetName(),
+		"component":  string(jenkinsInstance.UID),
+	}
+
+	serviceAccount = &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serviceAccountName,
+			Namespace: jenkinsInstance.GetNamespace(),
+			Labels:    labels,
+		},
+
+		Secrets:                      jenkinsInstance.Spec.ServiceAccount.Secrets,
+		ImagePullSecrets:             jenkinsInstance.Spec.ServiceAccount.ImagePullSecrets,
+		AutomountServiceAccountToken: jenkinsInstance.Spec.ServiceAccount.AutomountServiceAccountToken,
+	}
+
+	err = controllerutil.SetControllerReference(jenkinsInstance, serviceAccount, bc.scheme)
+	if err != nil {
+		glog.Errorf("Could not set controller reference on serviceaccount %s", serviceAccountName)
+		return nil, err
+	}
+
+	err = bc.Client.Create(context.TODO(), serviceAccount)
+	return serviceAccount, err
+}
+
+// newNetworkPolicy creates a NetworkPolicy (if needed) for a JenkinsInstance. It also sets
+// the appropriate OwnerReferences on the resources so handleObject can discover
+// the JenkinsInstance resource that 'owns' it.
+func (bc *ReconcileJenkinsInstance) newNetworkPolicy(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) (*netv1.NetworkPolicy, error) {
+	if !jenkinsInstance.Spec.NetworkPolicy {
+		return nil, nil
+	}
+
+	policy := &netv1.NetworkPolicy{}
+	err := bc.Client.Get(
+		context.TODO(),
+		types.NewNamespacedNameFromString(
+			fmt.Sprintf("%s%c%s", jenkinsInstance.GetNamespace(), types.Separator,
+				jenkinsInstance.GetName())),
+		policy)
+	// If the policy doesn't exist, we'll create it
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return nil, err
+		}
+	} else {
+		// If the role binding is not controlled by this JenkinsInstance resource, we should log
+		// a warning to the event recorder
+		if !metav1.IsControlledBy(policy, jenkinsInstance) {
+			msg := fmt.Sprintf(MessageResourceExists, policy.GetName())
+			bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
+			return policy, fmt.Errorf(msg)
+		}
+
+		return policy, nil
+	}
+
+	labels := map[string]string{
+		"app":        "jenkinsci",
+		"controller": jenkinsInstance.GetName(),
+		"component":  string(jenkinsInstance.UID),
+	}
+
+	policy = &netv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      jenkinsInstance.GetName(),
+			Namespace: jenkinsInstance.GetNamespace(),
+			Labels:    labels,
+		},
+
+		Spec: netv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{
+				MatchLabels: labels,
+			},
+			Ingress: []netv1.NetworkPolicyIngressRule{
+				{
+					Ports: []netv1.NetworkPolicyPort{
+						{
+							Port: &intstr.IntOrString{
+								Type:   intstr.Int,
+								IntVal: JenkinsMasterPort,
+							},
+						},
+						{
+							Port: &intstr.IntOrString{
+								Type:   intstr.Int,
+								IntVal: JenkinsAgentPort,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	err = controllerutil.SetControllerReference(jenkinsInstance, policy, bc.scheme)
+	if err != nil {
+		glog.Error("Could not set controller reference on network policy %s", jenkinsInstance.GetName())
+		return nil, err
+	}
+
+	err = bc.Client.Create(context.TODO(), policy)
+	return policy, err
 }
 
 // newDeployment creates a new Deployment for a JenkinsInstance resource. It also sets
 // the appropriate OwnerReferences on the resource so handleObject can discover
 // the JenkinsInstance resource that 'owns' it.
 func (bc *ReconcileJenkinsInstance) newDeployment(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) (*appsv1.Deployment, error) {
+	// Get the deployment with the name specified in JenkinsInstance.spec
+	deployment := &appsv1.Deployment{}
+	err := bc.Client.Get(
+		context.TODO(), types.NewNamespacedNameFromString(
+			fmt.Sprintf("%s%c%s", jenkinsInstance.GetNamespace(), types.Separator,
+				jenkinsInstance.GetName())),
+		deployment)
+	// If the resource doesn't exist, we'll create it
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return nil, err
+		}
+	} else {
+		// If the Deployment is not controlled by this JenkinsInstance resource, we should log
+		// a warning to the event recorder and return
+		if !metav1.IsControlledBy(deployment, jenkinsInstance) {
+			msg := fmt.Sprintf(MessageResourceExists, deployment.GetName())
+			bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
+			return deployment, fmt.Errorf(msg)
+		}
+
+		return deployment, nil
+	}
+
 	labels := map[string]string{
 		"app":        "jenkinsci",
 		"controller": jenkinsInstance.GetName(),
@@ -592,9 +1006,50 @@ func (bc *ReconcileJenkinsInstance) newDeployment(jenkinsInstance *jenkinsv1alph
 	commandString += ""
 
 	// Get the correct volume source to use
-	pvcName := jenkinsInstance.Spec.JobsPvc
+	// if pvc name is specified, try to either locate it or create it
+	pvcName := jenkinsInstance.GetName()
+	if jenkinsInstance.Spec.Storage != nil {
+		if jenkinsInstance.Spec.Storage.JobsPvc != "" {
+			pvcName = jenkinsInstance.Spec.Storage.JobsPvc
+		}
+		pvc := &corev1.PersistentVolumeClaim{}
+		err = bc.Client.Get(
+			context.TODO(),
+			types.NewNamespacedNameFromString(
+				fmt.Sprintf("%s%c%s", jenkinsInstance.GetNamespace(), types.Separator, pvcName)),
+			pvc)
+
+		// if PVC is not found
+		if errors.IsNotFound(err) {
+			// error out if pvc spec is not specified
+			if jenkinsInstance.Spec.Storage.JobsPvcSpec == nil {
+				return nil, fmt.Errorf(
+					"PVC %s does not exist and JobsPvcSpec is not specified",
+					pvcName)
+			}
+
+			// otherwise create the pvc
+			pvc = &corev1.PersistentVolumeClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      pvcName,
+					Namespace: jenkinsInstance.GetNamespace(),
+				},
+				Spec: *jenkinsInstance.Spec.Storage.JobsPvcSpec,
+			}
+			err = controllerutil.SetControllerReference(jenkinsInstance, pvc, bc.scheme)
+			if err != nil {
+				return nil, err
+			}
+			err = bc.Client.Create(context.TODO(), pvc)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// if PVC name is not specified, use an EmptyDir
 	var volumeSource corev1.VolumeSource
-	if pvcName == "" {
+	if jenkinsInstance.Spec.Storage == nil {
 		volumeSource = corev1.VolumeSource{
 			EmptyDir: &corev1.EmptyDirVolumeSource{},
 		}
@@ -607,13 +1062,15 @@ func (bc *ReconcileJenkinsInstance) newDeployment(jenkinsInstance *jenkinsv1alph
 		}
 	}
 
-	deployment := &appsv1.Deployment{
+	var replicas int32 = JenkinsReplicas
+	deployment = &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      jenkinsInstance.GetName(),
-			Namespace: jenkinsInstance.GetNamespace(),
+			Name:        jenkinsInstance.GetName(),
+			Namespace:   jenkinsInstance.GetNamespace(),
+			Annotations: jenkinsInstance.Spec.Annotations,
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: jenkinsInstance.Spec.Replicas,
+			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
 			},
@@ -629,14 +1086,14 @@ func (bc *ReconcileJenkinsInstance) newDeployment(jenkinsInstance *jenkinsv1alph
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "master",
-									ContainerPort: jenkinsInstance.Spec.MasterPort,
-									HostPort:      jenkinsInstance.Spec.MasterPort,
+									ContainerPort: JenkinsMasterPort,
+									HostPort:      JenkinsMasterPort,
 									Protocol:      "TCP",
 								},
 								{
 									Name:          "agent",
-									ContainerPort: jenkinsInstance.Spec.AgentPort,
-									HostPort:      jenkinsInstance.Spec.AgentPort,
+									ContainerPort: JenkinsAgentPort,
+									HostPort:      JenkinsAgentPort,
 									Protocol:      "TCP",
 								},
 							},
@@ -646,7 +1103,7 @@ func (bc *ReconcileJenkinsInstance) newDeployment(jenkinsInstance *jenkinsv1alph
 								"-c",
 								commandString,
 							},
-							ImagePullPolicy: jenkinsInstance.Spec.PullPolicy,
+							ImagePullPolicy: JenkinsPullPolicy,
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "init-groovy-d",
@@ -681,10 +1138,20 @@ func (bc *ReconcileJenkinsInstance) newDeployment(jenkinsInstance *jenkinsv1alph
 		},
 	}
 
+	// assign service account if needed
+	if jenkinsInstance.Spec.ServiceAccount != nil {
+		serviceAccountName := jenkinsInstance.GetName()
+		if jenkinsInstance.Spec.ServiceAccount.Name != "" {
+			serviceAccountName = jenkinsInstance.Spec.ServiceAccount.Name
+		}
+		deployment.Spec.Template.Spec.ServiceAccountName = serviceAccountName
+	}
+
 	err = controllerutil.SetControllerReference(jenkinsInstance, deployment, bc.scheme)
 	if err != nil {
 		return nil, err
 	}
 
-	return deployment, nil
+	err = bc.Client.Create(context.TODO(), deployment)
+	return deployment, err
 }
