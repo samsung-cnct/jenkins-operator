@@ -22,6 +22,11 @@ func AmRunningInCluster() bool {
 	return kubeServiceHostPresent && kubeServicePortPresent
 }
 
+func GetJenkinsLocationHost(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) string {
+	hostUrl, _ := url.Parse(jenkinsInstance.Spec.Location)
+	return hostUrl.Host
+}
+
 // gets the correct endpoint for a given service based on whether code is running in cluster or not
 func GetServiceEndpoint(service *corev1.Service, path string, internalPort int32) (string, error) {
 	var endpoint string
@@ -56,9 +61,9 @@ func GetServiceEndpoint(service *corev1.Service, path string, internalPort int32
 }
 
 // GetJenkinsApiToken gets an api token for the admin user from a newly created jenkins deployment
-func GetJenkinsApiToken(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, service *corev1.Service, adminSecret *corev1.Secret) (string, error) {
+func GetJenkinsApiToken(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, service *corev1.Service, adminSecret *corev1.Secret, masterPort int32) (string, error) {
 
-	serviceUrl, err := GetServiceEndpoint(service, "me/configure", jenkinsInstance.Spec.MasterPort)
+	serviceUrl, err := GetServiceEndpoint(service, "me/configure", masterPort)
 	if err != nil {
 		return "", err
 	}

@@ -26,9 +26,8 @@ spec:
               type: string
             adminsecret:
               type: string
-            agentport:
-              format: int32
-              type: integer
+            annotations:
+              type: object
             config:
               type: string
             env:
@@ -39,13 +38,21 @@ spec:
             image:
               pattern: .+:.+
               type: string
-            jobspvc:
-              type: string
+            ingress:
+              properties:
+                annotations:
+                  type: object
+                path:
+                  type: string
+                service:
+                  type: string
+                tlssecret:
+                  type: string
+              type: object
             location:
               type: string
-            masterport:
-              format: int32
-              type: integer
+            networkpolicy:
+              type: boolean
             plugins:
               items:
                 properties:
@@ -55,13 +62,42 @@ spec:
                     type: string
                 type: object
               type: array
-            pullpolicy:
-              type: string
-            replicas:
-              format: int32
-              type: integer
-            servicetype:
-              type: string
+            rbac:
+              properties:
+                clusterrole:
+                  type: string
+              type: object
+            service:
+              properties:
+                annotations:
+                  type: object
+                name:
+                  type: string
+                servicetype:
+                  type: string
+              type: object
+            serviceaccount:
+              properties:
+                automountServiceAccountToken:
+                  type: boolean
+                imagePullSecrets:
+                  items:
+                    type: object
+                  type: array
+                name:
+                  type: string
+                secrets:
+                  items:
+                    type: object
+                  type: array
+              type: object
+            storage:
+              properties:
+                jobspvc:
+                  type: string
+                jobspvcspec:
+                  type: object
+              type: object
           type: object
         status:
           properties:
