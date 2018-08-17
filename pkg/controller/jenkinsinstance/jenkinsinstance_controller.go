@@ -184,6 +184,10 @@ type ReconcileJenkinsInstance struct {
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=extensions,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=rbac,resources=clusterrolebindings,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=networking,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=jenkins.jenkinsoperator.maratoid.github.com,resources=jenkinsinstances,verbs=get;list;watch;create;update;patch;delete
 func (bc *ReconcileJenkinsInstance) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	jenkinsInstance := &jenkinsv1alpha1.JenkinsInstance{}
@@ -381,17 +385,17 @@ func (bc *ReconcileJenkinsInstance) newSetupSecret(jenkinsInstance *jenkinsv1alp
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return nil, err
-		} else {
-			// If the Secret is not controlled by this JenkinsInstance resource, we should log
-			// a warning to the event recorder and return
-			if !metav1.IsControlledBy(setupSecret, jenkinsInstance) {
-				msg := fmt.Sprintf(MessageResourceExists, setupSecret.GetName())
-				bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
-				return setupSecret, fmt.Errorf(msg)
-			}
-
-			return setupSecret, nil
 		}
+	} else {
+		// If the Secret is not controlled by this JenkinsInstance resource, we should log
+		// a warning to the event recorder and return
+		if !metav1.IsControlledBy(setupSecret, jenkinsInstance) {
+			msg := fmt.Sprintf(MessageResourceExists, setupSecret.GetName())
+			bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
+			return setupSecret, fmt.Errorf(msg)
+		}
+
+		return setupSecret, nil
 	}
 
 	labels := map[string]string{
@@ -516,17 +520,17 @@ func (bc *ReconcileJenkinsInstance) newService(jenkinsInstance *jenkinsv1alpha1.
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return nil, err
-		} else {
-			// If the Service is not controlled by this JenkinsInstance resource, we should log
-			// a warning to the event recorder and ret
-			if !metav1.IsControlledBy(service, jenkinsInstance) {
-				msg := fmt.Sprintf(MessageResourceExists, service.GetName())
-				bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
-				return service, fmt.Errorf(msg)
-			}
-
-			return service, nil
 		}
+	} else {
+		// If the Service is not controlled by this JenkinsInstance resource, we should log
+		// a warning to the event recorder and ret
+		if !metav1.IsControlledBy(service, jenkinsInstance) {
+			msg := fmt.Sprintf(MessageResourceExists, service.GetName())
+			bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
+			return service, fmt.Errorf(msg)
+		}
+
+		return service, nil
 	}
 
 	labels := map[string]string{
@@ -603,17 +607,17 @@ func (bc *ReconcileJenkinsInstance) newIngress(jenkinsInstance *jenkinsv1alpha1.
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return nil, err
-		} else {
-			// If the Ingress is not controlled by this JenkinsInstance resource, we should log
-			// a warning to the event recorder and ret
-			if !metav1.IsControlledBy(ingress, jenkinsInstance) {
-				msg := fmt.Sprintf(MessageResourceExists, ingress.GetName())
-				bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
-				return ingress, fmt.Errorf(msg)
-			}
-
-			return ingress, nil
 		}
+	} else {
+		// If the Ingress is not controlled by this JenkinsInstance resource, we should log
+		// a warning to the event recorder and ret
+		if !metav1.IsControlledBy(ingress, jenkinsInstance) {
+			msg := fmt.Sprintf(MessageResourceExists, ingress.GetName())
+			bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
+			return ingress, fmt.Errorf(msg)
+		}
+
+		return ingress, nil
 	}
 
 	labels := map[string]string{
@@ -623,11 +627,10 @@ func (bc *ReconcileJenkinsInstance) newIngress(jenkinsInstance *jenkinsv1alpha1.
 	}
 
 	serviceName := jenkinsInstance.GetName()
-	if jenkinsInstance.Spec.Service == nil {
-		if jenkinsInstance.Spec.Ingress.Service == "" {
-			return nil, fmt.Errorf("jenkins service is disabled, but ingress is enabled and does not specify pre-exisiting service name")
-		}
-
+	if jenkinsInstance.Spec.Service != nil && jenkinsInstance.Spec.Service.Name != "" {
+		serviceName = jenkinsInstance.Spec.Service.Name
+	}
+	if jenkinsInstance.Spec.Ingress.Service != "" {
 		serviceName = jenkinsInstance.Spec.Ingress.Service
 	}
 
@@ -703,17 +706,17 @@ func (bc *ReconcileJenkinsInstance) newRoleBinding(jenkinsInstance *jenkinsv1alp
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return nil, err
-		} else {
-			// If the role binding is not controlled by this JenkinsInstance resource, we should log
-			// a warning to the event recorder and ret
-			if !metav1.IsControlledBy(binding, jenkinsInstance) {
-				msg := fmt.Sprintf(MessageResourceExists, binding.GetName())
-				bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
-				return binding, fmt.Errorf(msg)
-			}
-
-			return binding, nil
 		}
+	} else {
+		// If the role binding is not controlled by this JenkinsInstance resource, we should log
+		// a warning to the event recorder and ret
+		if !metav1.IsControlledBy(binding, jenkinsInstance) {
+			msg := fmt.Sprintf(MessageResourceExists, binding.GetName())
+			bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
+			return binding, fmt.Errorf(msg)
+		}
+
+		return binding, nil
 	}
 
 	labels := map[string]string{
@@ -814,15 +817,15 @@ func (bc *ReconcileJenkinsInstance) newServiceAccount(jenkinsInstance *jenkinsv1
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return nil, err
-		} else {
-			if !metav1.IsControlledBy(serviceAccount, jenkinsInstance) {
-				msg := fmt.Sprintf(MessageResourceExists, serviceAccountName)
-				bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
-				return serviceAccount, fmt.Errorf(msg)
-			}
-
-			return serviceAccount, nil
 		}
+	} else {
+		if !metav1.IsControlledBy(serviceAccount, jenkinsInstance) {
+			msg := fmt.Sprintf(MessageResourceExists, serviceAccountName)
+			bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
+			return serviceAccount, fmt.Errorf(msg)
+		}
+
+		return serviceAccount, nil
 	}
 
 	// create service account
@@ -873,17 +876,17 @@ func (bc *ReconcileJenkinsInstance) newNetworkPolicy(jenkinsInstance *jenkinsv1a
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return nil, err
-		} else {
-			// If the role binding is not controlled by this JenkinsInstance resource, we should log
-			// a warning to the event recorder
-			if !metav1.IsControlledBy(policy, jenkinsInstance) {
-				msg := fmt.Sprintf(MessageResourceExists, policy.GetName())
-				bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
-				return policy, fmt.Errorf(msg)
-			}
-
-			return policy, nil
 		}
+	} else {
+		// If the role binding is not controlled by this JenkinsInstance resource, we should log
+		// a warning to the event recorder
+		if !metav1.IsControlledBy(policy, jenkinsInstance) {
+			msg := fmt.Sprintf(MessageResourceExists, policy.GetName())
+			bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
+			return policy, fmt.Errorf(msg)
+		}
+
+		return policy, nil
 	}
 
 	labels := map[string]string{
@@ -949,17 +952,17 @@ func (bc *ReconcileJenkinsInstance) newDeployment(jenkinsInstance *jenkinsv1alph
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return nil, err
-		} else {
-			// If the Deployment is not controlled by this JenkinsInstance resource, we should log
-			// a warning to the event recorder and return
-			if !metav1.IsControlledBy(deployment, jenkinsInstance) {
-				msg := fmt.Sprintf(MessageResourceExists, deployment.GetName())
-				bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
-				return deployment, fmt.Errorf(msg)
-			}
-
-			return deployment, nil
 		}
+	} else {
+		// If the Deployment is not controlled by this JenkinsInstance resource, we should log
+		// a warning to the event recorder and return
+		if !metav1.IsControlledBy(deployment, jenkinsInstance) {
+			msg := fmt.Sprintf(MessageResourceExists, deployment.GetName())
+			bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
+			return deployment, fmt.Errorf(msg)
+		}
+
+		return deployment, nil
 	}
 
 	labels := map[string]string{
