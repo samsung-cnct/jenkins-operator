@@ -24,12 +24,30 @@ spec:
           properties:
             jenkinsinstance:
               type: string
+            jenkinssecrets:
+              items:
+                properties:
+                  secretdata:
+                    type: object
+                  secretname:
+                    pattern: ^[a-z][a-z-]*[a-z]
+                    type: string
+                  secrettype:
+                    pattern: usernamePassword|secretText|secretFile|certificate
+                    type: string
+                type: object
+              type: array
             jobdsl:
               type: string
             jobxml:
               type: string
           type: object
         status:
+          properties:
+            phase:
+              type: string
+          required:
+          - phase
           type: object
       type: object
   version: v1alpha1

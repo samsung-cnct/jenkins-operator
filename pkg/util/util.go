@@ -12,8 +12,45 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
+
+func InArray(val interface{}, array interface{}) (exists bool, index int) {
+	exists = false
+	index = -1
+
+	switch reflect.TypeOf(array).Kind() {
+	case reflect.Slice:
+		s := reflect.ValueOf(array)
+
+		for i := 0; i < s.Len(); i++ {
+			if reflect.DeepEqual(val, s.Index(i).Interface()) == true {
+				index = i
+				exists = true
+				return
+			}
+		}
+	}
+
+	return
+}
+
+func AddFinalizer(finalizer string, finalizers []string) []string {
+	if exists, _ := InArray(finalizer, finalizers); exists {
+		return finalizers
+	}
+
+	return append(finalizers, finalizer)
+}
+
+func DeleteFinalizer(finalizer string, finalizers []string) []string {
+	if exists, index := InArray(finalizer, finalizers); exists {
+		return append(finalizers[:index], finalizers[index+1:]...)
+	}
+
+	return finalizers
+}
 
 func AmRunningInCluster() bool {
 	_, kubeServiceHostPresent := os.LookupEnv("KUBERNETES_SERVICE_HOST")

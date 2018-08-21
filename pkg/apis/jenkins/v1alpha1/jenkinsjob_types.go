@@ -23,6 +23,45 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+const (
+	JenkinsJobSecretUserPass = "usernamePassword"
+	JenkinsJobSecretText     = "secretText"
+	JenkinsJobSecretFile     = "secretFile"
+	JenkinsJobSecretCert     = "certificate"
+)
+
+const (
+	JenkinsJobSecretUsernameKey    = "username"
+	JenkinsJobSecretPasswordKey    = "password"
+	JenkinsJobSecretFileKey        = "data"
+	JenkinsJobSecretTextKey        = "text"
+	JenkinsJobSecretCertificateKey = "certificate"
+)
+
+// JenkinsSecret spec defines secret data to be used by JenkinsJob
+type JenkinsSecretSpec struct {
+	// secret name
+	// +kubebuilder:validation:Pattern=^[a-z][a-z-]*[a-z]
+	SecretName string `json:"secretname,omitempty"`
+	// secret type
+	// +kubebuilder:validation:Pattern=usernamePassword|secretText|secretFile|certificate
+	SecretType string `json:"secrettype,omitempty"`
+
+	// secret data dictionary. Accepted keys are:
+	// For secretFile:
+	// filename - name of the file
+	// data - file data
+	// for usernamePassword:
+	// username - user name
+	// password - password
+	// for secretText:
+	// text - secret text data
+	// for certificate:
+	// password - certificate password
+	// certificate - PKCS#12 certificate data
+	SecretData map[string]string `json:"secretdata,omitempty"`
+}
+
 // JenkinsJobSpec defines the desired state of JenkinsJob
 type JenkinsJobSpec struct {
 	// ID of the JenkinsServer instance to install this plugin in
@@ -33,12 +72,15 @@ type JenkinsJobSpec struct {
 
 	// Content of a jenkins job in form of Jenkins JobDSL
 	JobDsl string `json:"jobdsl,omitempty"`
+
+	// Jenkins secret data
+	JenkinsSecrets []JenkinsSecretSpec `json:"jenkinssecrets,omitempty"`
 }
 
 // JenkinsJobStatus defines the observed state of JenkinsJob
 type JenkinsJobStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// state if jenkins server instance
+	Phase string `json:"phase"`
 }
 
 // +genclient
