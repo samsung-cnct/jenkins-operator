@@ -22,21 +22,23 @@ spec:
           type: object
         spec:
           properties:
-            jenkinsinstance:
-              type: string
-            jenkinssecrets:
+            credentials:
               items:
                 properties:
-                  secretdata:
-                    type: object
-                  secretname:
+                  credential:
                     pattern: ^[a-z][a-z-]*[a-z]
                     type: string
-                  secrettype:
+                  credentialtype:
                     pattern: usernamePassword|secretText|secretFile|certificate
                     type: string
+                  secret:
+                    type: string
+                  secretdata:
+                    type: object
                 type: object
               type: array
+            jenkinsinstance:
+              type: string
             jobdsl:
               type: string
             jobxml:

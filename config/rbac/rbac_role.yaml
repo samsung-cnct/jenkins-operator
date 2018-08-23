@@ -101,18 +101,6 @@ rules:
   - patch
   - delete
 - apiGroups:
-  - batch
-  resources:
-  - jobs
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
   - jenkins.jenkinsoperator.maratoid.github.com
   resources:
   - jenkinsjobs
@@ -128,30 +116,6 @@ rules:
   - ""
   resources:
   - secrets
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - batch
-  resources:
-  - jobs
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - jenkins.jenkinsoperator.maratoid.github.com
-  resources:
-  - jenkinsplugins
   verbs:
   - get
   - list

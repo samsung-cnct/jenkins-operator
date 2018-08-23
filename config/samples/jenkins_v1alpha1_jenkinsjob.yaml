@@ -47,13 +47,15 @@ spec:
               shell('echo Hello World!')
           }
       }
-  jenkinssecrets:
-    - secretname: userpass-creds
-      secrettype: usernamePassword
+  credentials:
+    - credential: userpass-creds
+      secret: jenkinsCredentials
+      credentialtype: usernamePassword
       secretdata:
-        username: username
-        password: password
-    - secretname: text-creds
-      secrettype: secretText
+        username: username-data
+        password: password-data
+    - credential: text-creds
+      secret: jenkinsCredentials
+      credentialtype: secretText
       secretdata:
-        text: the quick brown fox jumped over a lazy dog
+        text: text-data

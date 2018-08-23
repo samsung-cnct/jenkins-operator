@@ -18,30 +18,21 @@ package jenkinsjob
 
 import (
 	"context"
-	"text/template"
-
-	"bytes"
 	"fmt"
 	"github.com/golang/glog"
 	jenkinsv1alpha1 "github.com/maratoid/jenkins-operator/pkg/apis/jenkins/v1alpha1"
-	"github.com/maratoid/jenkins-operator/pkg/bindata"
 	"github.com/maratoid/jenkins-operator/pkg/util"
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"net/url"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"time"
 )
 
 const (
@@ -97,15 +88,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// Watch a Job created by JenkinsJob
-	err = c.Watch(&source.Kind{Type: &batchv1.Job{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &jenkinsv1alpha1.JenkinsJob{},
-	})
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -120,10 +102,11 @@ type ReconcileJenkinsJob struct {
 
 // Reconcile reads that state of the cluster for a JenkinsJob object and makes changes based on the state read
 // and what is in the JenkinsJob.Spec
-// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=jenkins.jenkinsoperator.maratoid.github.com,resources=jenkinsjobs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 func (bc *ReconcileJenkinsJob) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+	glog.Infof("Start reconcile for %s", request.Name)
+
 	// Fetch the JenkinsJob instance
 	instance := &jenkinsv1alpha1.JenkinsJob{}
 	err := bc.Get(context.TODO(), request.NamespacedName, instance)
@@ -138,541 +121,200 @@ func (bc *ReconcileJenkinsJob) Reconcile(request reconcile.Request) (reconcile.R
 		return reconcile.Result{}, err
 	}
 
-	jenkinsInstanceName := instance.Spec.JenkinsInstance
-	if jenkinsInstanceName == "" {
-		// We choose to absorb the error here as the worker would requeue the
-		// resource otherwise. Instead, the next time the resource is updated
-		// the resource will be queued again.
-		glog.Errorf("%s: JenkinsInstance must be specified", request.String())
-		return reconcile.Result{}, nil
-	}
+	// add a finalizer if missing
+	if instance.DeletionTimestamp == nil {
+		updated, err := bc.addFinalizer(instance)
+		if err != nil || updated {
+			if err != nil {
+				glog.Errorf("Error adding job %s finalizer: %s", instance.GetName(), err)
+			}
 
-	// Get the jenkins instance this plugin is intended for
-	jenkinsInstance := &jenkinsv1alpha1.JenkinsInstance{}
-	err = bc.Client.Get(
-		context.TODO(),
-		types.NewNamespacedNameFromString(fmt.Sprintf("%s%c%s", request.Namespace, types.Separator, jenkinsInstanceName)),
-		jenkinsInstance)
-	if errors.IsNotFound(err) {
-		glog.Errorf("JenkinsInstance %s referred to by JenkinsJob %s does not exist.", jenkinsInstanceName, instance.GetName())
-		return reconcile.Result{}, err
-	}
-
-	// make sure the jenkins instance is ready
-	// Otherwise re-queue
-	if jenkinsInstance.Status.Phase != "Ready" {
-		glog.Errorf("JenkinsInstance %s referred to by JenkinsJob % is not ready.", jenkinsInstanceName, instance.GetName())
-		return reconcile.Result{}, fmt.Errorf("JenkinsInstance %s not ready", jenkinsInstanceName)
-	}
-
-	// Get the secret with the name specified in JenkinsInstance.status
-	jenkinsSetupSecret := &corev1.Secret{}
-	err = bc.Client.Get(
-		context.TODO(),
-		types.NewNamespacedNameFromString(fmt.Sprintf("%s%c%s", request.Namespace, types.Separator, jenkinsInstance.Status.SetupSecret)),
-		jenkinsSetupSecret)
-	// If the resource doesn't exist, requeue
-	if errors.IsNotFound(err) {
-		glog.Errorf(
-			"JenkinsInstance %s referred to by JenkinsJob % is not ready: secret %s does not exist",
-			jenkinsInstanceName, instance.GetName(), jenkinsInstance.Spec.AdminSecret)
-		return reconcile.Result{}, err
-	}
-
-	// if deletion timestamp is not null
-	// process the job finalizer
-	if instance.DeletionTimestamp != nil {
-		alreadyFinalized, err := bc.finalizeJob(jenkinsInstance, instance, jenkinsSetupSecret)
+			return reconcile.Result{}, err
+		}
+	} else {
+		err = bc.finalizeJob(instance)
 		if err != nil {
 			glog.Errorf(
 				"Could not finalize JenkinsJob %s", instance.GetName())
 		}
 
-		if (err != nil) || (!alreadyFinalized) {
-			return reconcile.Result{}, err
-		}
-	}
-
-	// create secrets from job secret data
-	err = bc.newSecrets(instance)
-	// If an error occurs during Get/Create, we'll requeue the item so we can
-	// attempt processing again later. This could have been caused by a
-	// temporary network failure, or any other transient reason.
-	if err != nil {
-		glog.Errorf("Error creating job: %s", err)
 		return reconcile.Result{}, err
 	}
 
-	// Create a kubernetes job that will use jenkins remote api to create the job from spec.
-	job, err := bc.newJob(jenkinsInstance, instance, jenkinsSetupSecret)
+	// Get the jenkins instance this plugin is intended for
+	jenkinsInstance, err := bc.getJenkinsInstance(instance)
+	if err != nil {
+		glog.Errorf("Could not get JenkinsInstance referred to by JenkinsJob %s: %s", instance.GetName(), err)
+		return reconcile.Result{}, err
+	}
+
+	// Get the secret with the name specified in JenkinsInstance.status
+	jenkinsSetupSecret, err := bc.getSetupSecret(jenkinsInstance)
+	if err != nil {
+		glog.Errorf("Could not get secret referred to by JenkinsInstance %s: %s", jenkinsInstance.GetName(), err)
+		return reconcile.Result{}, err
+	}
+
+	// Create a jenkins job
+	err = bc.newJob(jenkinsInstance, instance, jenkinsSetupSecret)
 	// If an error occurs during Get/Create, we'll requeue the item so we can
 	// attempt processing again later. This could have been caused by a
 	// temporary network failure, or any other transient reason.
 	if err != nil {
-		glog.Errorf("Error creating job: %s", err)
+		glog.Errorf("Error creating jenkins job configuration: %s", err)
 		return reconcile.Result{}, err
 	}
 
 	// TODO Update the Job iff its observed Spec does
-	// TODO: update status
-	// TODO: this is a bad place for a wait
-	// wait for job
-	timeout := 0
-	syncType := corev1.EventTypeWarning
-	syncResult := ErrSynced
-	syncResultMsg := ErrMessageResourceFailed
-	for timeout < 2000 {
-		err = bc.Client.Get(context.TODO(), request.NamespacedName, job)
-		if err != nil {
-			glog.Errorf("Error getting job: %s", err)
-			break
-		}
 
-		if job.Status.Succeeded > 0 {
-			syncType = corev1.EventTypeNormal
-			syncResult = SuccessSynced
-			syncResultMsg = MessageResourceSynced
-			break
-		}
-
-		time.Sleep(5 * time.Second)
-		timeout++
-	}
-
-	err = bc.updateJenkinsJobStatus(instance, true)
+	err = bc.updateJenkinsJobStatus(instance)
 	if err != nil {
 		glog.Errorf("Error updating job %s status: %s", instance.GetName(), err)
 		return reconcile.Result{}, err
 	}
 
-	bc.EventRecorder.Event(instance, syncType, syncResult, syncResultMsg)
+	bc.EventRecorder.Event(instance, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
 	return reconcile.Result{}, nil
 }
 
-func (bc *ReconcileJenkinsJob) newSecrets(jenkinsJob *jenkinsv1alpha1.JenkinsJob) error {
-	labels := map[string]string{
-		"app":        "jenkinsci",
-		"controller": jenkinsJob.GetName(),
-		"component":  string(jenkinsJob.UID),
-	}
-
-	annotations := map[string]string{
-		"jenkins.io/credentials-description": "credential from Kubernetes",
-	}
-
-	for _, secretSpec := range jenkinsJob.Spec.JenkinsSecrets {
-		secretName := secretSpec.SecretName
-		if secretName == "" {
-			return fmt.Errorf("SecretName is required")
-		}
-
-		secretType := secretSpec.SecretType
-		if secretType == "" {
-			return fmt.Errorf("SecretType is required")
-		}
-
-		// set label
-		labels["jenkins.io/credentials-type"] = secretType
-
-		dataValidation := func(job string, secret string, key string, acceptedValues []string) error {
-			validationErr := fmt.Errorf(
-				"job %s's secret %s has invalid secret data key %s - acceptable values are: %v",
-				job, secret, key, acceptedValues)
-			for _, acceptedValue := range acceptedValues {
-				if key == acceptedValue {
-					return nil
-				}
-			}
-
-			return validationErr
-		}
-
-		stringData := map[string]string{}
-		for dataKey, dataVal := range secretSpec.SecretData {
-			// validate
-			switch secretType {
-			case jenkinsv1alpha1.JenkinsJobSecretCert:
-				acceptedValues := []string{
-					jenkinsv1alpha1.JenkinsJobSecretCertificateKey,
-					jenkinsv1alpha1.JenkinsJobSecretPasswordKey,
-				}
-				if validationErr := dataValidation(jenkinsJob.GetName(), secretName, dataKey, acceptedValues); validationErr != nil {
-					return validationErr
-				}
-			case jenkinsv1alpha1.JenkinsJobSecretFile:
-				acceptedValues := []string{
-					jenkinsv1alpha1.JenkinsJobSecretFileKey,
-				}
-				if validationErr := dataValidation(jenkinsJob.GetName(), secretName, dataKey, acceptedValues); validationErr != nil {
-					return validationErr
-				}
-			case jenkinsv1alpha1.JenkinsJobSecretText:
-				acceptedValues := []string{
-					jenkinsv1alpha1.JenkinsJobSecretTextKey,
-				}
-				if validationErr := dataValidation(jenkinsJob.GetName(), secretName, dataKey, acceptedValues); validationErr != nil {
-					return validationErr
-				}
-			case jenkinsv1alpha1.JenkinsJobSecretUserPass:
-				acceptedValues := []string{
-					jenkinsv1alpha1.JenkinsJobSecretPasswordKey,
-					jenkinsv1alpha1.JenkinsJobSecretUsernameKey,
-				}
-				if validationErr := dataValidation(jenkinsJob.GetName(), secretName, dataKey, acceptedValues); validationErr != nil {
-					return validationErr
-				}
-			}
-
-			// add to string data
-			stringData[dataKey] = dataVal
-		}
-
-		secret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:        secretSpec.SecretName,
-				Namespace:   jenkinsJob.GetNamespace(),
-				Labels:      labels,
-				Annotations: annotations,
-			},
-			StringData: stringData,
-			Type:       corev1.SecretTypeOpaque,
-		}
-
-		err := bc.Client.Get(
-			context.TODO(), types.NewNamespacedNameFromString(
-				fmt.Sprintf("%s%c%s", jenkinsJob.GetNamespace(), types.Separator,
-					secretSpec.SecretName)),
-			secret)
-		if err != nil {
-			if errors.IsNotFound(err) {
-				err := controllerutil.SetControllerReference(jenkinsJob, secret, bc.scheme)
-				if err != nil {
-					return err
-				}
-
-				err = bc.Client.Create(context.TODO(), secret)
-				if err != nil {
-					return err
-				}
-			} else {
-				return err
-			}
-		}
-
-		// If the secret is not controlled by this JenkinsJob resource, we should log
-		// a warning to the event recorder and return
-		if !metav1.IsControlledBy(secret, jenkinsJob) {
-			msg := fmt.Sprintf(MessageResourceExists, secretSpec.SecretName)
-			bc.EventRecorder.Event(jenkinsJob, corev1.EventTypeWarning, ErrResourceExists, msg)
-			return fmt.Errorf(msg)
-		}
-
-		// set string data and update
-		secretCopy := secret.DeepCopy()
-		secretCopy.StringData = stringData
-
-		err = controllerutil.SetControllerReference(jenkinsJob, secretCopy, bc.scheme)
-		if err != nil {
-			return err
-		}
-
-		err = bc.Client.Update(context.TODO(), secretCopy)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (bc *ReconcileJenkinsJob) newJob(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, jenkinsJob *jenkinsv1alpha1.JenkinsJob, setupSecret *corev1.Secret) (*batchv1.Job, error) {
-	job := &batchv1.Job{}
-	err := bc.Client.Get(
-		context.TODO(), types.NewNamespacedNameFromString(
-			fmt.Sprintf("%s%c%s", jenkinsJob.GetNamespace(), types.Separator,
-				jenkinsJob.GetName())),
-		job)
-
-	if err != nil {
-		if !errors.IsNotFound(err) {
-			return nil, err
-		}
-	} else {
-		// If the Job is not controlled by this JenkinsJob resource, we should log
-		// a warning to the event recorder and return
-		if !metav1.IsControlledBy(job, jenkinsJob) {
-			msg := fmt.Sprintf(MessageResourceExists, job.GetName())
-			bc.EventRecorder.Event(jenkinsJob, corev1.EventTypeWarning, ErrResourceExists, msg)
-			return job, fmt.Errorf(msg)
-		}
-	}
-
-	labels := map[string]string{
-		"app":        "jenkinsci",
-		"controller": jenkinsJob.GetName(),
-		"component":  string(jenkinsJob.UID),
-	}
-
+func (bc *ReconcileJenkinsJob) newJob(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, jenkinsJob *jenkinsv1alpha1.JenkinsJob, setupSecret *corev1.Secret) error {
 	jenkinsJobXml := jenkinsJob.Spec.JobXml
 	jenkinsJobDsl := jenkinsJob.Spec.JobDsl
 
-	apiUrl, err := url.Parse(jenkinsInstance.Status.Api)
-	if err != nil {
-		return nil, err
+	if jenkinsJobDsl != "" && jenkinsJobXml != "" {
+		return fmt.Errorf("JenkinsJob %s can not have both JobXml and JobDSL defined", jenkinsJob.GetName())
 	}
 
-	apiUrl.User = url.UserPassword(string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
-
-	type JobInfo struct {
-		Api     string
-		JobName string
-		JobXml  string
-		JobDsl  string
+	if jenkinsJobDsl == "" && jenkinsJobXml == "" {
+		return fmt.Errorf("JenkinsJob %s must have either JobXml or JobDSL defined", jenkinsJob.GetName())
 	}
 
-	jobInfo := JobInfo{
-		Api:     apiUrl.String(),
-		JobName: jenkinsJob.GetName(),
-		JobXml:  jenkinsJobXml,
-		JobDsl:  jenkinsJobDsl,
+	var err error
+	if jenkinsJobDsl != "" {
+		err = util.CreateJenkinsDSLJob(jenkinsInstance, setupSecret, jenkinsJob.Spec.JobDsl)
+	} else {
+		err = util.CreateJenkinsXMLJob(jenkinsInstance, setupSecret, jenkinsJob.GetName(), jenkinsJob.Spec.JobXml)
 	}
 
-	// load the correct template (xml or dsl)
-	var jobConfig []byte
-	if jenkinsJobXml != "" {
-		jobConfig, err = bindata.Asset("job-scripts/install-xml-job.sh")
-		if err != nil {
-			return nil, err
-		}
-	} else if jenkinsJobDsl != "" {
-		jobConfig, err = bindata.Asset("job-scripts/install-dsl-job.sh")
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// parse the config template
-	configTemplate, err := template.New("jenkins-job").Parse(string(jobConfig[:]))
-	if err != nil {
-		return nil, err
-	}
-
-	var jobConfigParsed bytes.Buffer
-	if err := configTemplate.Execute(&jobConfigParsed, jobInfo); err != nil {
-		return nil, err
-	}
-
-	var env []corev1.EnvVar
-	env = append(env, corev1.EnvVar{
-		Name:  "INSTALL_JOB",
-		Value: jobConfigParsed.String(),
-	})
-
-	var backoffLimit int32 = 3
-	job = &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      jenkinsJob.GetName(),
-			Namespace: jenkinsJob.GetNamespace(),
-			Labels:    labels,
-		},
-
-		Spec: batchv1.JobSpec{
-			Template: corev1.PodTemplateSpec{
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:            jenkinsJob.GetName(),
-							Image:           "java:latest",
-							ImagePullPolicy: "IfNotPresent",
-							Command: []string{
-								"bash",
-								"-c",
-								"eval \"$INSTALL_JOB\"",
-							},
-							Env: env,
-						},
-					},
-					RestartPolicy: corev1.RestartPolicyOnFailure,
-				},
-			},
-			BackoffLimit: &backoffLimit,
-		},
-	}
-
-	err = controllerutil.SetControllerReference(jenkinsJob, job, bc.scheme)
-	if err != nil {
-		return nil, err
-	}
-
-	err = bc.Client.Create(context.TODO(), job)
-	return job, err
+	return err
 }
 
-func (bc *ReconcileJenkinsJob) updateJenkinsJobStatus(jenkinsJob *jenkinsv1alpha1.JenkinsJob, addFinalizer bool) error {
+func (bc *ReconcileJenkinsJob) updateJenkinsJobStatus(jenkinsJob *jenkinsv1alpha1.JenkinsJob) error {
 	// NEVER modify objects from the store. It's a read-only, local cache.
 	// You can use DeepCopy() to make a deep copy of original object and modify this copy
 	// Or create a copy manually for better performance
 	jenkinsJobCopy := jenkinsJob.DeepCopy()
 
-	// set finalizers
-	if addFinalizer {
-		jenkinsJobCopy.Finalizers = util.AddFinalizer(Finalizer, jenkinsJobCopy.Finalizers)
-	} else {
-		jenkinsJobCopy.Finalizers = util.DeleteFinalizer(Finalizer, jenkinsJobCopy.Finalizers)
-	}
-
 	// set sync phase
 	jenkinsJobCopy.Status.Phase = "Ready"
 
 	// Until #38113 is merged, we must use Update instead of UpdateStatus to
-	// update the Status block of the JenkinsInstanceC resource. UpdateStatus will not
+	// update the Status block of the JenkinsInstance resource. UpdateStatus will not
 	// allow changes to the Spec of the resource, which is ideal for ensuring
 	// nothing other than resource status has been updated.
 	return bc.Client.Update(context.TODO(), jenkinsJobCopy)
 }
 
-func (bc *ReconcileJenkinsJob) finalizeJob(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, jenkinsJob *jenkinsv1alpha1.JenkinsJob, setupSecret *corev1.Secret) (bool, error) {
-	// if there are no finalizers, return
+func (bc *ReconcileJenkinsJob) deleteFinalizer(jenkinsJob *jenkinsv1alpha1.JenkinsJob) (bool, error) {
 	if exists, _ := util.InArray(Finalizer, jenkinsJob.Finalizers); exists {
-		return exists, nil
-	}
-
-	job := &batchv1.Job{}
-	err := bc.Client.Get(
-		context.TODO(), types.NewNamespacedNameFromString(
-			fmt.Sprintf("%s%c%s", jenkinsJob.GetNamespace(), types.Separator,
-				jenkinsJob.GetName())),
-		job)
-
-	if err != nil {
-		if !errors.IsNotFound(err) {
-			return false, err
-		}
-	} else {
-		// If the Job is not controlled by this JenkinsJob resource, we should log
-		// a warning to the event recorder and return
-		if !metav1.IsControlledBy(job, jenkinsJob) {
-			msg := fmt.Sprintf(MessageResourceExists, job.GetName())
-			bc.EventRecorder.Event(jenkinsJob, corev1.EventTypeWarning, ErrResourceExists, msg)
-			return false, fmt.Errorf(msg)
-		}
-	}
-
-	labels := map[string]string{
-		"app":        "jenkinsci",
-		"controller": jenkinsJob.GetName(),
-		"component":  string(jenkinsJob.UID),
-	}
-
-	apiUrl, err := url.Parse(jenkinsInstance.Status.Api)
-	if err != nil {
-		return false, err
-	}
-
-	apiUrl.User = url.UserPassword(
-		string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
-
-	type JobInfo struct {
-		Api     string
-		JobName string
-	}
-
-	jobInfo := JobInfo{
-		Api:     apiUrl.String(),
-		JobName: jenkinsJob.GetName(),
-	}
-
-	// load the correct template (xml or dsl)
-	var jobConfig []byte
-	jobConfig, err = bindata.Asset("job-scripts/delete-job.sh")
-	if err != nil {
-		return false, err
-	}
-
-	// parse the config template
-	configTemplate, err := template.New("delete-jenkins-job").Parse(string(jobConfig[:]))
-	if err != nil {
-		return false, err
-	}
-
-	var jobConfigParsed bytes.Buffer
-	if err := configTemplate.Execute(&jobConfigParsed, jobInfo); err != nil {
-		return false, err
-	}
-
-	var env []corev1.EnvVar
-	env = append(env, corev1.EnvVar{
-		Name:  "DELETE_JOB",
-		Value: jobConfigParsed.String(),
-	})
-
-	var backoffLimit int32 = 3
-	job = &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      jenkinsJob.GetName(),
-			Namespace: jenkinsJob.GetNamespace(),
-			Labels:    labels,
-		},
-
-		Spec: batchv1.JobSpec{
-			Template: corev1.PodTemplateSpec{
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:            jenkinsJob.GetName(),
-							Image:           "java:latest",
-							ImagePullPolicy: "IfNotPresent",
-							Command: []string{
-								"bash",
-								"-c",
-								"eval \"$INSTALL_JOB\"",
-							},
-							Env: env,
-						},
-					},
-					RestartPolicy: corev1.RestartPolicyOnFailure,
-				},
-			},
-			BackoffLimit: &backoffLimit,
-		},
-	}
-
-	err = controllerutil.SetControllerReference(jenkinsJob, job, bc.scheme)
-	if err != nil {
-		return false, err
-	}
-
-	err = bc.Client.Create(context.TODO(), job)
-	// TODO: this is a bad place for a wait
-	// wait for job
-	timeout := 0
-	for timeout < 2000 {
-		err = bc.Client.Get(
-			context.TODO(),
-			types.NewNamespacedNameFromString(fmt.Sprintf(
-				"%s%c%s",
-				jenkinsJob.GetNamespace(),
-				types.Separator,
-				jenkinsJob.GetName())),
-			job)
-		if err != nil {
-			glog.Errorf("Error getting job: %s", err)
-			break
-		}
-
-		if job.Status.Succeeded > 0 {
-			break
-		}
-
-		time.Sleep(5 * time.Second)
-		timeout++
-	}
-
-	err = bc.updateJenkinsJobStatus(jenkinsJob, false)
-	if err != nil {
-		glog.Errorf("Error updating job %s status: %s", jenkinsJob.GetName(), err)
-		return false, err
+		jenkinsJobCopy := jenkinsJob.DeepCopy()
+		jenkinsJobCopy.Finalizers = util.DeleteFinalizer(Finalizer, jenkinsJobCopy.Finalizers)
+		return true, bc.Client.Update(context.TODO(), jenkinsJobCopy)
 	}
 
 	return false, nil
+}
+
+func (bc *ReconcileJenkinsJob) addFinalizer(jenkinsJob *jenkinsv1alpha1.JenkinsJob) (bool, error) {
+	if exists, _ := util.InArray(Finalizer, jenkinsJob.Finalizers); !exists {
+
+		glog.Infof("Adding finalizer for %s", jenkinsJob.Name)
+		// NEVER modify objects from the store. It's a read-only, local cache.
+		// You can use DeepCopy() to make a deep copy of original object and modify this copy
+		// Or create a copy manually for better performance
+		jenkinsJobCopy := jenkinsJob.DeepCopy()
+		jenkinsJobCopy.Finalizers = util.AddFinalizer(Finalizer, jenkinsJobCopy.Finalizers)
+		return true, bc.Client.Update(context.TODO(), jenkinsJobCopy)
+	}
+
+	return false, nil
+}
+
+func (bc *ReconcileJenkinsJob) getJenkinsInstance(jenkinsJob *jenkinsv1alpha1.JenkinsJob) (*jenkinsv1alpha1.JenkinsInstance, error) {
+	jenkinsInstanceName := jenkinsJob.Spec.JenkinsInstance
+	if jenkinsInstanceName == "" {
+		return nil, fmt.Errorf("JenkinsInstance must be specified for JenkinsJob %s", jenkinsJob.GetName())
+	}
+
+	// Get the jenkins instance this plugin is intended for
+	jenkinsInstance := &jenkinsv1alpha1.JenkinsInstance{}
+	err := bc.Client.Get(
+		context.TODO(),
+		types.NewNamespacedNameFromString(fmt.Sprintf("%s%c%s", jenkinsJob.Namespace, types.Separator, jenkinsInstanceName)),
+		jenkinsInstance)
+	if errors.IsNotFound(err) {
+		return nil, err
+	}
+
+	// make sure the jenkins instance is ready
+	// Otherwise re-queue
+	if jenkinsInstance.Status.Phase != "Ready" {
+		return nil, fmt.Errorf(
+			"JenkinsInstance %s referred to by JenkinsJob %s is not ready",
+			jenkinsInstanceName,
+			jenkinsJob.GetName())
+	}
+
+	return jenkinsInstance, nil
+}
+
+func (bc *ReconcileJenkinsJob) getSetupSecret(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) (*corev1.Secret, error) {
+	jenkinsSetupSecret := &corev1.Secret{}
+	err := bc.Client.Get(
+		context.TODO(),
+		types.NewNamespacedNameFromString(
+			fmt.Sprintf(
+				"%s%c%s",
+				jenkinsInstance.GetNamespace(),
+				types.Separator,
+				jenkinsInstance.Status.SetupSecret)),
+		jenkinsSetupSecret)
+
+	// If the resource doesn't exist, requeue
+	if errors.IsNotFound(err) {
+		return nil, fmt.Errorf("Setup secret %s for JenkinsInstance %s does not exist",
+			jenkinsInstance.Status.SetupSecret, jenkinsInstance.GetName())
+	}
+
+	return jenkinsSetupSecret, err
+}
+
+func (bc *ReconcileJenkinsJob) finalizeJob(jenkinsJob *jenkinsv1alpha1.JenkinsJob) error {
+	// if there are no finalizers, return
+	if exists, _ := util.InArray(Finalizer, jenkinsJob.Finalizers); !exists {
+		return nil
+	}
+
+	glog.Infof("Start finalize for %s", jenkinsJob.Name)
+
+	// Get the jenkins instance this plugin is intended for
+	jenkinsInstance, err := bc.getJenkinsInstance(jenkinsJob)
+	if err != nil {
+		return err
+	}
+
+	// Get the secret with the name specified in JenkinsInstance.status
+	setupSecret, err := bc.getSetupSecret(jenkinsInstance)
+	if err != nil {
+		return err
+	}
+
+	// delete the actual job config from jenkins
+	err = util.DeleteJenkinsJob(jenkinsInstance, setupSecret, jenkinsJob.GetName())
+	if err != nil {
+		return err
+	}
+
+	_, err = bc.deleteFinalizer(jenkinsJob)
+	return err
 }

@@ -39,26 +39,46 @@ const (
 )
 
 // JenkinsSecret spec defines secret data to be used by JenkinsJob
-type JenkinsSecretSpec struct {
-	// secret name
+type JenkinsCredentialSpec struct {
+	// Id of credential to be created
 	// +kubebuilder:validation:Pattern=^[a-z][a-z-]*[a-z]
-	SecretName string `json:"secretname,omitempty"`
-	// secret type
+	Credential string `json:"credential,omitempty"`
+	// credential type
 	// +kubebuilder:validation:Pattern=usernamePassword|secretText|secretFile|certificate
-	SecretType string `json:"secrettype,omitempty"`
+	CredentialType string `json:"credentialtype,omitempty"`
 
-	// secret data dictionary. Accepted keys are:
+	// name of secret that contains credential data
+	Secret string `json:"secret,omitempty"`
+
+	// map of credential fields to kubernetes secret data fields (from the Secret value above)
+	// in the <credential field>:<kubernetes secret field>
+	// format
+	// ---
 	// For secretFile:
 	// filename - name of the file
 	// data - file data
+	// ie:
+	// filename: name-of-file
+	// data: data-of-file
+	// ---
 	// for usernamePassword:
 	// username - user name
 	// password - password
+	// ie:
+	// username: name-of-user
+	// password: userpass
+	// ---
 	// for secretText:
 	// text - secret text data
+	// ie:
+	// text: secrettext
+	// ---
 	// for certificate:
 	// password - certificate password
 	// certificate - PKCS#12 certificate data
+	// ie:
+	// password: certpw
+	// certificate: pkcs-cert
 	SecretData map[string]string `json:"secretdata,omitempty"`
 }
 
@@ -74,7 +94,7 @@ type JenkinsJobSpec struct {
 	JobDsl string `json:"jobdsl,omitempty"`
 
 	// Jenkins secret data
-	JenkinsSecrets []JenkinsSecretSpec `json:"jenkinssecrets,omitempty"`
+	Credentials []JenkinsCredentialSpec `json:"credentials,omitempty"`
 }
 
 // JenkinsJobStatus defines the observed state of JenkinsJob
