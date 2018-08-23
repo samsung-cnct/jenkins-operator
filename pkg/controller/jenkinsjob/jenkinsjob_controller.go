@@ -189,6 +189,36 @@ func (bc *ReconcileJenkinsJob) newJob(jenkinsInstance *jenkinsv1alpha1.JenkinsIn
 		return fmt.Errorf("JenkinsJob %s must have either JobXml or JobDSL defined", jenkinsJob.GetName())
 	}
 
+	for _, credentialSpec := range jenkinsJob.Spec.Credentials {
+		credentialSecret := &corev1.Secret{}
+		err := bc.Client.Get(
+			context.TODO(),
+			types.NewNamespacedNameFromString(
+				fmt.Sprintf(
+					"%s%c%s",
+					jenkinsInstance.GetNamespace(),
+					types.Separator,
+					credentialSpec.Secret)),
+			credentialSecret)
+
+		// If the resource doesn't exist, requeue
+		if errors.IsNotFound(err) {
+			return fmt.Errorf("Credential secret %s for JenkinsJob %s does not exist", credentialSpec.Secret, jenkinsJob.GetName())
+		}
+
+		err = util.CreateJenkinsCredential(
+			jenkinsInstance,
+			setupSecret,
+			credentialSecret,
+			jenkinsJob.GetName(),
+			credentialSpec.Credential,
+			credentialSpec.CredentialType,
+			credentialSpec.SecretData)
+		if err != nil {
+			return err
+		}
+	}
+
 	var err error
 	if jenkinsJobDsl != "" {
 		err = util.CreateJenkinsDSLJob(jenkinsInstance, setupSecret, jenkinsJob.Spec.JobDsl)
@@ -313,6 +343,16 @@ func (bc *ReconcileJenkinsJob) finalizeJob(jenkinsJob *jenkinsv1alpha1.JenkinsJo
 	err = util.DeleteJenkinsJob(jenkinsInstance, setupSecret, jenkinsJob.GetName())
 	if err != nil {
 		return err
+	}
+
+	for _, credentialSpec := range jenkinsJob.Spec.Credentials {
+		err = util.DeleteJenkinsCredential(
+			jenkinsInstance,
+			setupSecret,
+			credentialSpec.Credential)
+		if err != nil {
+			return err
+		}
 	}
 
 	_, err = bc.deleteFinalizer(jenkinsJob)

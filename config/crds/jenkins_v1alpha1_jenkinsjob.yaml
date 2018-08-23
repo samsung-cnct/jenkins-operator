@@ -29,7 +29,7 @@ spec:
                     pattern: ^[a-z][a-z-]*[a-z]
                     type: string
                   credentialtype:
-                    pattern: usernamePassword|secretText|secretFile|certificate
+                    pattern: usernamePassword|secretText|serviceaccount|vaultgithub|vaultapprole|vaulttoken
                     type: string
                   secret:
                     type: string

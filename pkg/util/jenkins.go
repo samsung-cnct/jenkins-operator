@@ -15,6 +15,38 @@ import (
 	"strings"
 )
 
+type credentialProperties struct {
+	Class      string
+	Properties []string
+}
+
+var credentialPropertyMap = map[string]credentialProperties{
+	"secretText": {
+		Class:      "org.jenkinsci.plugins.plaincredentials.impl.StringCredentialsImpl",
+		Properties: []string{"text"},
+	},
+	"usernamePassword": {
+		Class:      "com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl",
+		Properties: []string{"username", "password"},
+	},
+	"serviceaccount": {
+		Class:      "org.jenkinsci.plugins.kubernetes.credentials.FileSystemServiceAccountCredential",
+		Properties: []string{},
+	},
+	"vaultgithub": {
+		Class:      "com.datapipe.jenkins.vault.credentials.VaultGithubTokenCredential",
+		Properties: []string{"accessToken"},
+	},
+	"vaultapprole": {
+		Class:      "com.datapipe.jenkins.vault.credentials.VaultAppRoleCredential",
+		Properties: []string{"roleId", "secretId"},
+	},
+	"vaulttoken": {
+		Class:      "com.datapipe.jenkins.vault.credentials.VaultTokenCredential",
+		Properties: []string{"token"},
+	},
+}
+
 func GetJenkinsLocationHost(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) string {
 	hostUrl, _ := url.Parse(jenkinsInstance.Spec.Location)
 	return hostUrl.Host
@@ -327,8 +359,25 @@ func DeleteJenkinsJob(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, setupSec
 	return nil
 }
 
+func getJenkinsCredentialJson(credentialSecret *corev1.Secret, jobName string, credentialId string, credentialType string, credentialMap map[string]string) string {
+	credentialJson := fmt.Sprintf(`{"": "0", "credentials": {"scope": "GLOBAL", "id": "%s", "description": "Credentials from %s", `, credentialId, jobName)
+
+	// add on properties
+	for _, property := range credentialPropertyMap[credentialType].Properties {
+		secretField := credentialMap[property]
+		propertyValue := string(credentialSecret.Data[secretField][:])
+
+		credentialJson = fmt.Sprintf(credentialJson, `,"`, property, `":"`, propertyValue, `",`)
+	}
+
+	// get credential class name
+	credentialJson = fmt.Sprint(credentialJson, `"$class": "`, credentialPropertyMap[credentialType].Class, `"}}`)
+
+	return credentialJson
+}
+
 // CreateJenkinsCredential adds a credential to jenkins
-func CreateJenkinsCredential(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, setupSecret *corev1.Secret, credential string) error {
+func CreateJenkinsCredential(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, setupSecret *corev1.Secret, credentialSecret *corev1.Secret, jobName string, credentialId string, credentialType string, credentialMap map[string]string) error {
 	apiUrl, err := url.Parse(jenkinsInstance.Status.Api)
 	if err != nil {
 		return err
@@ -336,9 +385,10 @@ func CreateJenkinsCredential(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, s
 	apiUrl.User = url.UserPassword(string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
 	apiUrl.Path = "/credentials/store/system/domain/_/createCredentials"
 
-	requestBody := url.Values{
-		"json": {credential},
-	}
+	credentialJson := getJenkinsCredentialJson(credentialSecret, jobName, credentialId, credentialType, credentialMap)
+
+	var requestBody url.Values
+	requestBody.Add("json", credentialJson)
 
 	// create request
 	req, err := http.NewRequest(
@@ -366,7 +416,7 @@ func CreateJenkinsCredential(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, s
 
 	resp, err := client.Do(req)
 	if err != nil {
-		glog.Errorf("Error performing POST request to %s: %v", apiUrl, err)
+		glog.Errorf("Error performing POST request to %s: %s client log: %s", apiUrl, err, client.LogString())
 		return err
 	}
 	defer resp.Body.Close()

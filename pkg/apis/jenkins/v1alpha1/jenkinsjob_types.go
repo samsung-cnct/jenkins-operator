@@ -44,7 +44,7 @@ type JenkinsCredentialSpec struct {
 	// +kubebuilder:validation:Pattern=^[a-z][a-z-]*[a-z]
 	Credential string `json:"credential,omitempty"`
 	// credential type
-	// +kubebuilder:validation:Pattern=usernamePassword|secretText|secretFile|certificate
+	// +kubebuilder:validation:Pattern=usernamePassword|secretText|serviceaccount|vaultgithub|vaultapprole|vaulttoken
 	CredentialType string `json:"credentialtype,omitempty"`
 
 	// name of secret that contains credential data
