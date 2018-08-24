@@ -2,6 +2,7 @@ package util
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/golang/glog"
@@ -23,7 +24,7 @@ type credentialProperties struct {
 var credentialPropertyMap = map[string]credentialProperties{
 	"secretText": {
 		Class:      "org.jenkinsci.plugins.plaincredentials.impl.StringCredentialsImpl",
-		Properties: []string{"text"},
+		Properties: []string{"secret"},
 	},
 	"usernamePassword": {
 		Class:      "com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl",
@@ -225,8 +226,27 @@ func CreateJenkinsDSLJob(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, setup
 	}
 	part.Write([]byte(jobDSL))
 
+	type DslJson struct {
+		Parameter []map[string]string `json:"parameter"`
+	}
+
+	dslJson := &DslJson{
+		Parameter: []map[string]string{
+			{
+				"name": "job.dsl",
+				"file": "file0",
+			},
+		},
+	}
+
+	jsonHeader, err := json.Marshal(dslJson)
+	if err != nil {
+		glog.Errorf("error creating jobDsl json for %s", jobDSL)
+		return err
+	}
+
 	// write the json part
-	err = writer.WriteField("json", "{\"parameter\": [{\"name\":\"job.dsl\", \"file\":\"file0\"}]}")
+	err = writer.WriteField("json", string(jsonHeader))
 	if err != nil {
 		glog.Errorf("Error creating post form: %s", err)
 		return err
@@ -301,6 +321,8 @@ func JenkinsJobExists(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, setupSec
 	}
 
 	req.Header.Add(csrfTokenKey, csrfTokenVal)
+	req.Header.Add("Accept", `*/*`)
+	req.Header.Add("User-Agent", `jenkins-operator`)
 
 	client := pester.New()
 	client.MaxRetries = 5
@@ -360,24 +382,87 @@ func DeleteJenkinsJob(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, setupSec
 }
 
 func getJenkinsCredentialJson(credentialSecret *corev1.Secret, jobName string, credentialId string, credentialType string, credentialMap map[string]string) string {
-	credentialJson := fmt.Sprintf(`{"": "0", "credentials": {"scope": "GLOBAL", "id": "%s", "description": "Credentials from %s", `, credentialId, jobName)
 
-	// add on properties
-	for _, property := range credentialPropertyMap[credentialType].Properties {
-		secretField := credentialMap[property]
-		propertyValue := string(credentialSecret.Data[secretField][:])
-
-		credentialJson = fmt.Sprintf(credentialJson, `,"`, property, `":"`, propertyValue, `",`)
+	type CredentialJson struct {
+		EmptyStr    int32             `json:""`
+		Credentials map[string]string `json:"credentials"`
 	}
 
-	// get credential class name
-	credentialJson = fmt.Sprint(credentialJson, `"$class": "`, credentialPropertyMap[credentialType].Class, `"}}`)
+	credentialJson := &CredentialJson{
+		EmptyStr: 0,
+		Credentials: map[string]string{
+			"scope":       "GLOBAL",
+			"id":          credentialId,
+			"description": fmt.Sprint("Credentials from ", jobName),
+			"$class":      credentialPropertyMap[credentialType].Class,
+		},
+	}
 
-	return credentialJson
+	// add on properties
+	for _, secretFieldKey := range credentialPropertyMap[credentialType].Properties {
+		credentialJson.Credentials[secretFieldKey] = string(credentialSecret.Data[credentialMap[secretFieldKey]][:])
+	}
+
+	credentialString, err := json.Marshal(credentialJson)
+	if err != nil {
+		glog.Errorf("error creating credential %s json for JenkinsJob %s", credentialId, jobName)
+	}
+
+	return string(credentialString)
+}
+
+// JenkinsJobExists checks whether a job with a particular name already exists in Jenkins
+func JenkinsCredentialExists(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, setupSecret *corev1.Secret, credentialId string) (bool, error) {
+	apiUrl, err := url.Parse(jenkinsInstance.Status.Api)
+	if err != nil {
+		return false, err
+	}
+	apiUrl.User = url.UserPassword(string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
+	apiUrl.Path = fmt.Sprint("credentials/store/system/domain/_/credential/", credentialId, "/api/json")
+
+	// create request
+	req, err := http.NewRequest(
+		"GET",
+		apiUrl.String(),
+		nil)
+	if err != nil {
+		glog.Errorf("Error creating GET request to %s", apiUrl)
+		return false, err
+	}
+
+	// add headers
+	csrfTokenKey, csrfTokenVal, err := GetCSRFToken(jenkinsInstance, setupSecret)
+	if err != nil {
+		glog.Errorf("Error getting CSRF token")
+		return false, err
+	}
+
+	req.Header.Add(csrfTokenKey, csrfTokenVal)
+	req.Header.Add("Accept", `*/*`)
+	req.Header.Add("User-Agent", `jenkins-operator`)
+
+	client := pester.New()
+	client.MaxRetries = 5
+	client.Backoff = pester.ExponentialBackoff
+	client.KeepLog = true
+
+	resp, err := client.Do(req)
+	if err != nil {
+		glog.Errorf("Error performing GET request to %s: %v", apiUrl, err)
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	return resp.StatusCode == 302, nil
 }
 
 // CreateJenkinsCredential adds a credential to jenkins
 func CreateJenkinsCredential(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, setupSecret *corev1.Secret, credentialSecret *corev1.Secret, jobName string, credentialId string, credentialType string, credentialMap map[string]string) error {
+	err := DeleteJenkinsCredential(jenkinsInstance, setupSecret, credentialId)
+	if err != nil {
+		return err
+	}
+
 	apiUrl, err := url.Parse(jenkinsInstance.Status.Api)
 	if err != nil {
 		return err
@@ -387,7 +472,7 @@ func CreateJenkinsCredential(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, s
 
 	credentialJson := getJenkinsCredentialJson(credentialSecret, jobName, credentialId, credentialType, credentialMap)
 
-	var requestBody url.Values
+	var requestBody = url.Values{}
 	requestBody.Add("json", credentialJson)
 
 	// create request
@@ -431,7 +516,7 @@ func DeleteJenkinsCredential(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, s
 		return err
 	}
 	apiUrl.User = url.UserPassword(string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
-	apiUrl.Path = fmt.Sprint("/credentials/store/system/domain/_/credential", id, "/doDelete")
+	apiUrl.Path = fmt.Sprint("/credentials/store/system/domain/_/credential/", id, "/doDelete")
 
 	// create request
 	req, err := http.NewRequest(

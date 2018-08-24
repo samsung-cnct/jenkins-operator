@@ -35,9 +35,9 @@ metadata:
   name: jenkins-credentials
 type: Opaque
 data:
-  username: bXlVc2VybmFtZQ==  # myUsername
-  password: UGEkJHdvcmQ=      # Pa$$word
-  text: dGhlIHF1aWNrIGJyb3duIGZveCBqdW1wZWQgb3ZlciBhIGxhenkgZG9nCg==
+  username-data: bXlVc2VybmFtZQo=
+  password-data: UGEkJHdvcmQ=
+  text-data: dGhlIHF1aWNrIGJyb3duIGZveCBqdW1wZWQgb3ZlciBhIGxhenkgZG9nCg==
 ---
 apiVersion: jenkins.jenkinsoperator.maratoid.github.com/v1alpha1
 kind: JenkinsJob
@@ -64,7 +64,7 @@ spec:
       secretdata:
         username: username-data
         password: password-data
-    - credential: text-creds
+    - credential: text-data
       secret: jenkins-credentials
       credentialtype: secretText
       secretdata:

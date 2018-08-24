@@ -153,7 +153,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 					if inst.Spec.AdminSecret == a.Meta.GetName() {
 						keys = append(keys, reconcile.Request{
 							NamespacedName: types.NewNamespacedNameFromString(
-								fmt.Sprintf("%s%c%s", inst.GetNamespace(), types.Separator, inst.Name)),
+								fmt.Sprintf("%s%c%s", inst.GetNamespace(), types.Separator, inst.GetName())),
 						})
 					}
 				}

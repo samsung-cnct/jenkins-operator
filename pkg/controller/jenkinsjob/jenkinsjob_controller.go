@@ -24,6 +24,7 @@ import (
 	"github.com/maratoid/jenkins-operator/pkg/util"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -84,6 +85,47 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 
 	// Watch for changes to JenkinsJob
 	err = c.Watch(&source.Kind{Type: &jenkinsv1alpha1.JenkinsJob{}}, &handler.EnqueueRequestForObject{})
+	if err != nil {
+		return err
+	}
+
+	// Watch Secret resources not owned by the JenkinsJob
+	// This is needed for re-loading login information from the pre-provided secret
+	// When credential secret changes, Watch will list all JenkinsJob instances
+	// and re-enqueue the keys for the ones that refer to that credential secret via their spec.
+	err = c.Watch(
+		&source.Kind{Type: &corev1.Secret{}},
+		&handler.EnqueueRequestsFromMapFunc{
+			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
+
+				jenkinsJobs := &jenkinsv1alpha1.JenkinsJobList{}
+				err = mgr.GetClient().List(
+					context.TODO(),
+					&client.ListOptions{LabelSelector: labels.Everything()},
+					jenkinsJobs)
+				if err != nil {
+					glog.Errorf("Could not list JenkinsJobs")
+					return []reconcile.Request{}
+				}
+
+				var keys []reconcile.Request
+				for _, inst := range jenkinsJobs.Items {
+					if inst.Spec.Credentials != nil {
+						for _, credential := range inst.Spec.Credentials {
+							if credential.Secret == a.Meta.GetName() {
+								keys = append(keys, reconcile.Request{
+									NamespacedName: types.NewNamespacedNameFromString(
+										fmt.Sprintf("%s%c%s", inst.GetNamespace(), types.Separator, inst.GetName())),
+								})
+							}
+						}
+					}
+				}
+
+				// return found keys
+				return keys
+			}),
+		})
 	if err != nil {
 		return err
 	}
@@ -215,7 +257,7 @@ func (bc *ReconcileJenkinsJob) newJob(jenkinsInstance *jenkinsv1alpha1.JenkinsIn
 			credentialSpec.CredentialType,
 			credentialSpec.SecretData)
 		if err != nil {
-			return err
+			return fmt.Errorf("Failed to create Jenkins credentials %s for JenkinsJob %s: %s", credentialSpec.Credential, jenkinsJob.GetName(), err)
 		}
 	}
 
@@ -342,7 +384,7 @@ func (bc *ReconcileJenkinsJob) finalizeJob(jenkinsJob *jenkinsv1alpha1.JenkinsJo
 	// delete the actual job config from jenkins
 	err = util.DeleteJenkinsJob(jenkinsInstance, setupSecret, jenkinsJob.GetName())
 	if err != nil {
-		return err
+		glog.Errorf("Failed to delete Jenkins Job config for JenkinsJob %s: %s", jenkinsJob.GetName(), err)
 	}
 
 	for _, credentialSpec := range jenkinsJob.Spec.Credentials {
@@ -351,7 +393,7 @@ func (bc *ReconcileJenkinsJob) finalizeJob(jenkinsJob *jenkinsv1alpha1.JenkinsJo
 			setupSecret,
 			credentialSpec.Credential)
 		if err != nil {
-			return err
+			glog.Errorf("Failed to delete Jenkins credentials %s for JenkinsJob %s: %s", credentialSpec.Credential, jenkinsJob.GetName(), err)
 		}
 	}
 
