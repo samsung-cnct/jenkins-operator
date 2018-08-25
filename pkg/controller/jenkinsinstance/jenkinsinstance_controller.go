@@ -375,6 +375,7 @@ func (bc *ReconcileJenkinsInstance) updateJenkinsInstanceStatus(jenkinsInstance 
 // the appropriate OwnerReferences on the resource so handleObject can discover
 // the JenkinsInstance resource that 'owns' it.
 func (bc *ReconcileJenkinsInstance) newSetupSecret(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, adminSecret *corev1.Secret) (*corev1.Secret, error) {
+	exists := false
 	setupSecret := &corev1.Secret{}
 	err := bc.Client.Get(
 		context.TODO(), types.NewNamespacedNameFromString(
@@ -395,7 +396,7 @@ func (bc *ReconcileJenkinsInstance) newSetupSecret(jenkinsInstance *jenkinsv1alp
 			return setupSecret, fmt.Errorf(msg)
 		}
 
-		return setupSecret, nil
+		exists = true
 	}
 
 	labels := map[string]string{
@@ -482,23 +483,30 @@ func (bc *ReconcileJenkinsInstance) newSetupSecret(jenkinsInstance *jenkinsv1alp
 		"user":                    adminUser,
 	}
 
-	setupSecret = &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      jenkinsInstance.GetName(),
-			Namespace: jenkinsInstance.GetNamespace(),
-			Labels:    labels,
-		},
-		StringData: stringData,
-		Type:       corev1.SecretTypeOpaque,
-	}
+	if exists {
+		setupSecretCopy := setupSecret.DeepCopy()
+		setupSecretCopy.StringData = stringData
+		err = bc.Client.Update(context.TODO(), setupSecretCopy)
+		return setupSecretCopy, err
+	} else {
+		setupSecret = &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      jenkinsInstance.GetName(),
+				Namespace: jenkinsInstance.GetNamespace(),
+				Labels:    labels,
+			},
+			StringData: stringData,
+			Type:       corev1.SecretTypeOpaque,
+		}
 
-	err = controllerutil.SetControllerReference(jenkinsInstance, setupSecret, bc.scheme)
-	if err != nil {
-		return nil, err
-	}
+		err = controllerutil.SetControllerReference(jenkinsInstance, setupSecret, bc.scheme)
+		if err != nil {
+			return nil, err
+		}
 
-	err = bc.Client.Create(context.TODO(), setupSecret)
-	return setupSecret, err
+		err = bc.Client.Create(context.TODO(), setupSecret)
+		return setupSecret, err
+	}
 }
 
 // newService creates a new Service for a JenkinsInstance resource. It also sets
