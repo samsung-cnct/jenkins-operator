@@ -550,3 +550,45 @@ func DeleteJenkinsCredential(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, s
 
 	return nil
 }
+
+// SafeRestartJenkins does a safe jenkins restart
+func SafeRestartJenkins(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, setupSecret *corev1.Secret) error {
+	apiUrl, err := url.Parse(jenkinsInstance.Status.Api)
+	if err != nil {
+		return err
+	}
+	apiUrl.User = url.UserPassword(string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
+	apiUrl.Path = "/safeRestart"
+
+	// create request
+	req, err := http.NewRequest(
+		"POST",
+		apiUrl.String(),
+		nil)
+	if err != nil {
+		glog.Errorf("Error creating POST request to %s", apiUrl)
+		return err
+	}
+
+	// add headers
+	csrfTokenKey, csrfTokenVal, err := GetCSRFToken(jenkinsInstance, setupSecret)
+	if err != nil {
+		glog.Errorf("Error getting CSRF token")
+		return err
+	}
+	req.Header.Add(csrfTokenKey, csrfTokenVal)
+
+	client := pester.New()
+	client.MaxRetries = 5
+	client.Backoff = pester.ExponentialBackoff
+	client.KeepLog = true
+
+	resp, err := client.Do(req)
+	if err != nil {
+		glog.Errorf("Error performing POST request to %s: %v", apiUrl, err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	return nil
+}

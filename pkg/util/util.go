@@ -11,6 +11,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
+func MergeSecretData(ms ...map[string][]byte) map[string][]byte {
+	res := map[string][]byte{}
+	for _, m := range ms {
+		for k, v := range m {
+			res[k] = v
+		}
+	}
+	return res
+}
+
 func InArray(val interface{}, array interface{}) (exists bool, index int) {
 	exists = false
 	index = -1
@@ -29,6 +39,16 @@ func InArray(val interface{}, array interface{}) (exists bool, index int) {
 	}
 
 	return
+}
+
+func GetNodePort(servicePorts []corev1.ServicePort, portName string) int32 {
+	for _, port := range servicePorts {
+		if port.Name == portName {
+			return port.NodePort
+		}
+	}
+
+	return 0
 }
 
 func AddFinalizer(finalizer string, finalizers []string) []string {
