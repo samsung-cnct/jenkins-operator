@@ -182,13 +182,13 @@ func (bc *ReconcileJenkinsJob) Reconcile(request reconcile.Request) (reconcile.R
 		err = bc.finalizeJob(instance)
 		if err != nil {
 			glog.Errorf(
-				"Could not finalize JenkinsJob %s", instance.GetName())
+				"Could not finalize JenkinsJob %s: %s", instance.GetName(), err)
 		}
 
 		return reconcile.Result{}, err
 	}
 
-	// Get the jenkins instance this plugin is intended for
+	// Get the jenkins instance this job is intended for
 	jenkinsInstance, err := bc.getJenkinsInstance(instance)
 	if err != nil {
 		glog.Errorf("Could not get JenkinsInstance referred to by JenkinsJob %s: %s", instance.GetName(), err)
@@ -323,11 +323,11 @@ func (bc *ReconcileJenkinsJob) getJenkinsInstance(jenkinsJob *jenkinsv1alpha1.Je
 		return nil, fmt.Errorf("JenkinsInstance must be specified for JenkinsJob %s", jenkinsJob.GetName())
 	}
 
-	// Get the jenkins instance this plugin is intended for
+	// Get the jenkins instance this job is intended for
 	jenkinsInstance := &jenkinsv1alpha1.JenkinsInstance{}
 	err := bc.Client.Get(
 		context.TODO(),
-		types.NewNamespacedNameFromString(fmt.Sprintf("%s%c%s", jenkinsJob.Namespace, types.Separator, jenkinsInstanceName)),
+		types.NamespacedName{Name: jenkinsInstanceName, Namespace: jenkinsJob.Namespace},
 		jenkinsInstance)
 	if errors.IsNotFound(err) {
 		return nil, err

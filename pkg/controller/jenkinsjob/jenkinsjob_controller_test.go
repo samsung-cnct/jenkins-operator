@@ -19,6 +19,7 @@ package jenkinsjob
 import (
 	"context"
 	jenkinsv1alpha1 "github.com/maratoid/jenkins-operator/pkg/apis/jenkins/v1alpha1"
+	"github.com/maratoid/jenkins-operator/pkg/test"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -32,11 +33,7 @@ import (
 
 // TODO: add tlsSecret for ingress testing
 const (
-	timeout     = time.Second * 15
-	xmlName     = "xml-jenkins-job"
-	dslName     = "dsl-jenkins-job"
-	failingName = "fail-jenkins-job"
-	namespace   = "default"
+	timeout = time.Second * 15
 )
 
 var _ = Describe("jenkins job controller", func() {
@@ -47,6 +44,13 @@ var _ = Describe("jenkins job controller", func() {
 		stop chan struct{}
 		// controller k8s client
 		c client.Client
+		// jenkins instance
+		instance *jenkinsv1alpha1.JenkinsInstance
+		// setup secret
+		secret *corev1.Secret
+		// request and key
+		expectedRequest   reconcile.Request
+		standardObjectkey types.NamespacedName
 	)
 
 	BeforeEach(func() {
@@ -61,76 +65,78 @@ var _ = Describe("jenkins job controller", func() {
 
 		stop = StartTestManager(mgr)
 
+		test.Setup()
+
+		secret = &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-job-secret",
+				Namespace: "default",
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{
+
+				"user":     []byte("dummy"),
+				"pass":     []byte("dummy"),
+				"apiToken": []byte("dummy"),
+			},
+		}
+		Expect(c.Create(context.TODO(), secret)).To(Succeed())
+		Eventually(func() error {
+			return c.Get(context.TODO(), types.NamespacedName{Name: "test-job-secret", Namespace: "default"}, secret)
+		}, timeout).Should(Succeed())
+
+		instance = &jenkinsv1alpha1.JenkinsInstance{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-job-jenkins",
+				Namespace: "default",
+			},
+			Spec: jenkinsv1alpha1.JenkinsInstanceSpec{
+				Image:       "dummy/dummy:dummy",
+				Executors:   1,
+				AdminSecret: "dummy",
+				Location:    "dummy",
+				AdminEmail:  "dummy",
+				Service: &jenkinsv1alpha1.ServiceSpec{
+					Name:        "dummy",
+					ServiceType: "NodePort",
+				},
+			},
+			Status: jenkinsv1alpha1.JenkinsInstanceStatus{
+				SetupSecret: "test-job-secret",
+				Api:         test.GetURL(),
+				Phase:       "Ready",
+			},
+		}
+		Expect(c.Create(context.TODO(), instance)).To(Succeed())
+		Eventually(func() error {
+			return c.Get(context.TODO(), types.NamespacedName{Name: "test-job-jenkins", Namespace: "default"}, instance)
+		}, timeout).Should(Succeed())
+
+		standardObjectkey = types.NamespacedName{Name: "test-job", Namespace: "default"}
+		expectedRequest = reconcile.Request{NamespacedName: standardObjectkey}
+
 	})
 
 	AfterEach(func() {
+		Expect(c.Delete(context.TODO(), instance)).To(Succeed())
+		Expect(c.Delete(context.TODO(), secret)).To(Succeed())
+
 		time.Sleep(3 * time.Second)
 		close(stop)
+		test.Teardown()
 	})
 
-	Describe("when creating a new JenkinsJob with XML source", func() {
-		var expectedRequest reconcile.Request
+	Describe("reconciles", func() {
 		var jenkinsJob *jenkinsv1alpha1.JenkinsJob
-		var standardObjectkey types.NamespacedName
-		var instance *jenkinsv1alpha1.JenkinsInstance
-		var secret *corev1.Secret
 
 		BeforeEach(func() {
-			standardObjectkey = types.NamespacedName{Name: xmlName, Namespace: namespace}
-			expectedRequest = reconcile.Request{NamespacedName: standardObjectkey}
-			instance = &jenkinsv1alpha1.JenkinsInstance{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      xmlName,
-					Namespace: namespace,
-				},
-				Spec: jenkinsv1alpha1.JenkinsInstanceSpec{
-					Image:       "dummy/dummy:dummy",
-					Executors:   1,
-					AdminSecret: "dummy",
-					Location:    "dummy",
-					AdminEmail:  "dummy",
-					Service: &jenkinsv1alpha1.ServiceSpec{
-						Name:        "dummy",
-						ServiceType: "NodePort",
-					},
-				},
-				Status: jenkinsv1alpha1.JenkinsInstanceStatus{
-					SetupSecret: xmlName,
-					Api:         "http://127.0.0.1:12345",
-					Phase:       "Ready",
-				},
-			}
-			Expect(c.Create(context.TODO(), instance)).To(Succeed())
-
-			secret = &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      xmlName,
-					Namespace: namespace,
-				},
-				Type: corev1.SecretTypeOpaque,
-				Data: map[string][]byte{
-
-					"user":     []byte("dummy"),
-					"pass":     []byte("dummy"),
-					"apiToken": []byte("dummy"),
-				},
-			}
-			Expect(c.Create(context.TODO(), secret)).To(Succeed())
-		})
-
-		AfterEach(func() {
-			Expect(c.Delete(context.TODO(), instance)).To(Succeed())
-			Expect(c.Delete(context.TODO(), secret)).To(Succeed())
-		})
-
-		It("reconciles", func() {
 			jenkinsJob = &jenkinsv1alpha1.JenkinsJob{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      xmlName,
-					Namespace: namespace,
+					Name:      "test-job",
+					Namespace: "default",
 				},
 				Spec: jenkinsv1alpha1.JenkinsJobSpec{
-					JenkinsInstance: xmlName,
+					JenkinsInstance: "test-job-jenkins",
 					JobXml: `
 						<?xml version="1.0" encoding="UTF-8"?><project>
         				<actions/>
@@ -155,84 +161,45 @@ var _ = Describe("jenkins job controller", func() {
     					</project>`,
 				},
 			}
+		})
+
+		It("Xml job", func() {
+			By("creating")
 			Expect(c.Create(context.TODO(), jenkinsJob)).To(Succeed())
 			Eventually(requests, timeout).Should(Receive(Equal(expectedRequest)))
+			Eventually(func() error {
+				return c.Get(context.TODO(), types.NamespacedName{Name: "test-job-jenkins", Namespace: "default"}, instance)
+			}, timeout).Should(Succeed())
 
-			When("deleting the jenkins job", func() {
-				err := c.Delete(context.TODO(), jenkinsJob)
-				Expect(err).NotTo(HaveOccurred())
+			By("deleting")
+			Expect(c.Delete(context.TODO(), jenkinsJob)).NotTo(HaveOccurred())
 
-				jenkinsJob = &jenkinsv1alpha1.JenkinsJob{}
-				Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, jenkinsJob) }, timeout).
-					Should(Succeed())
-				Expect(jenkinsJob.Finalizers).NotTo(BeEmpty())
-			})
+			By("cleaning up finalizers")
+			jenkinsJob = &jenkinsv1alpha1.JenkinsJob{}
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, jenkinsJob) }, timeout).
+				Should(Succeed())
+			Expect(jenkinsJob.Finalizers).NotTo(BeEmpty())
+
+			jenkinsJob.Finalizers = []string{}
+
+			Expect(c.Update(context.TODO(), jenkinsJob)).NotTo(HaveOccurred())
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, jenkinsJob) }, timeout).
+				ShouldNot(Succeed())
+
 		})
 	})
 
-	Describe("when creating a new JenkinsJob with JobDSL source", func() {
-		var expectedRequest reconcile.Request
+	Describe("reconciles", func() {
 		var jenkinsJob *jenkinsv1alpha1.JenkinsJob
-		var standardObjectkey types.NamespacedName
-		var instance *jenkinsv1alpha1.JenkinsInstance
-		var secret *corev1.Secret
 
 		BeforeEach(func() {
-			standardObjectkey = types.NamespacedName{Name: dslName, Namespace: namespace}
-			expectedRequest = reconcile.Request{NamespacedName: standardObjectkey}
-			instance = &jenkinsv1alpha1.JenkinsInstance{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      dslName,
-					Namespace: namespace,
-				},
-				Spec: jenkinsv1alpha1.JenkinsInstanceSpec{
-					Image:       "dummy/dummy:dummy",
-					Executors:   1,
-					AdminSecret: "dummy",
-					Location:    "dummy",
-					AdminEmail:  "dummy",
-					Service: &jenkinsv1alpha1.ServiceSpec{
-						Name:        "dummy",
-						ServiceType: "NodePort",
-					},
-				},
-				Status: jenkinsv1alpha1.JenkinsInstanceStatus{
-					SetupSecret: dslName,
-					Api:         "http://127.0.0.1:12345",
-					Phase:       "Ready",
-				},
-			}
-			Expect(c.Create(context.TODO(), instance)).To(Succeed())
-
-			secret = &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      dslName,
-					Namespace: namespace,
-				},
-				Type: corev1.SecretTypeOpaque,
-				Data: map[string][]byte{
-
-					"user":     []byte("dummy"),
-					"pass":     []byte("dummy"),
-					"apiToken": []byte("dummy"),
-				},
-			}
-			Expect(c.Create(context.TODO(), secret)).To(Succeed())
-		})
-
-		AfterEach(func() {
-			Expect(c.Delete(context.TODO(), instance)).To(Succeed())
-			Expect(c.Delete(context.TODO(), secret)).To(Succeed())
-		})
-
-		It("reconciles", func() {
 			jenkinsJob = &jenkinsv1alpha1.JenkinsJob{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      dslName,
-					Namespace: namespace,
+					Name:      "test-job",
+					Namespace: "default",
 				},
 				Spec: jenkinsv1alpha1.JenkinsJobSpec{
-					JenkinsInstance: dslName,
+					JenkinsInstance: "test-job-jenkins",
 					JobDsl: `
 						freeStyleJob('jenkinsjob-sample-dsl') {
 							description('Job created from custom resource with JobDSL')
@@ -243,107 +210,66 @@ var _ = Describe("jenkins job controller", func() {
 						}`,
 				},
 			}
+		})
+
+		It("Dsl job", func() {
+			By("creating")
 			Expect(c.Create(context.TODO(), jenkinsJob)).To(Succeed())
 			Eventually(requests, timeout).Should(Receive(Equal(expectedRequest)))
+			Eventually(func() error {
+				return c.Get(context.TODO(), types.NamespacedName{Name: "test-job-jenkins", Namespace: "default"}, instance)
+			}, timeout).Should(Succeed())
 
-			When("deleting the jenkins job", func() {
-				err := c.Delete(context.TODO(), jenkinsJob)
-				Expect(err).NotTo(HaveOccurred())
+			By("deleting")
+			Expect(c.Delete(context.TODO(), jenkinsJob)).NotTo(HaveOccurred())
 
-				jenkinsJob = &jenkinsv1alpha1.JenkinsJob{}
-				Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, jenkinsJob) }, timeout).
-					Should(Succeed())
-				Expect(jenkinsJob.Finalizers).NotTo(BeEmpty())
-			})
+			By("cleaning up finalizers")
+			jenkinsJob = &jenkinsv1alpha1.JenkinsJob{}
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, jenkinsJob) }, timeout).
+				Should(Succeed())
+			Expect(jenkinsJob.Finalizers).NotTo(BeEmpty())
+
+			jenkinsJob.Finalizers = []string{}
+
+			Expect(c.Update(context.TODO(), jenkinsJob)).NotTo(HaveOccurred())
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, jenkinsJob) }, timeout).
+				ShouldNot(Succeed())
 		})
-
 	})
 
-	Describe("when creating a new JenkinsJob with JobDSL and XML source", func() {
-		var expectedRequest reconcile.Request
+	Describe("fails to reconcile", func() {
 		var jenkinsJob *jenkinsv1alpha1.JenkinsJob
-		var standardObjectkey types.NamespacedName
-		var instance *jenkinsv1alpha1.JenkinsInstance
-		var secret *corev1.Secret
 
 		BeforeEach(func() {
-			standardObjectkey = types.NamespacedName{Name: failingName, Namespace: namespace}
-			expectedRequest = reconcile.Request{NamespacedName: standardObjectkey}
-			instance = &jenkinsv1alpha1.JenkinsInstance{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      failingName,
-					Namespace: namespace,
-				},
-				Spec: jenkinsv1alpha1.JenkinsInstanceSpec{
-					Image:       "dummy/dummy:dummy",
-					Executors:   1,
-					AdminSecret: "dummy",
-					Location:    "dummy",
-					AdminEmail:  "dummy",
-					Service: &jenkinsv1alpha1.ServiceSpec{
-						Name:        "dummy",
-						ServiceType: "NodePort",
-					},
-				},
-				Status: jenkinsv1alpha1.JenkinsInstanceStatus{
-					SetupSecret: failingName,
-					Api:         "http://127.0.0.1:12345",
-					Phase:       "Ready",
-				},
-			}
-			Expect(c.Create(context.TODO(), instance)).To(Succeed())
-
-			secret = &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      failingName,
-					Namespace: namespace,
-				},
-				Type: corev1.SecretTypeOpaque,
-				Data: map[string][]byte{
-
-					"user":     []byte("dummy"),
-					"pass":     []byte("dummy"),
-					"apiToken": []byte("dummy"),
-				},
-			}
-			Expect(c.Create(context.TODO(), secret)).To(Succeed())
-		})
-
-		AfterEach(func() {
-			Expect(c.Delete(context.TODO(), instance)).To(Succeed())
-			Expect(c.Delete(context.TODO(), secret)).To(Succeed())
-		})
-
-		It("does not reconcile", func() {
 			jenkinsJob = &jenkinsv1alpha1.JenkinsJob{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      failingName,
-					Namespace: namespace,
+					Name:      "test-job",
+					Namespace: "default",
 				},
 				Spec: jenkinsv1alpha1.JenkinsJobSpec{
-					JenkinsInstance: failingName,
+					JenkinsInstance: "test-job-jenkins",
 					JobXml: `
-							<?xml version="1.0" encoding="UTF-8"?><project>
-	        				<actions/>
-	        				<description>Job created from custom resource from XML</description>
-	        				<keepDependencies>false</keepDependencies>
-	        				<properties/>
-	        				<scm class="hudson.scm.NullSCM"/>
-	        				<canRoam>true</canRoam>
-	        				<disabled>false</disabled>
-	        				<blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
-	        				<blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
-	        				<triggers/>
-	        				<concurrentBuild>false</concurrentBuild>
-	        				<builders>
-	            				<hudson.tasks.Shell>
-	                				<command>echo Hello World with xml!</command>
-	            				</hudson.tasks.Shell>
-	        				</builders>
-	        				<publishers/>
-	        				<buildWrappers/>
-	        				<displayName>From custom resource XML</displayName>
-	    					</project>`,
+						<?xml version="1.0" encoding="UTF-8"?><project>
+        				<actions/>
+        				<description>Job created from custom resource from XML</description>
+        				<keepDependencies>false</keepDependencies>
+        				<properties/>
+        				<scm class="hudson.scm.NullSCM"/>
+        				<canRoam>true</canRoam>
+        				<disabled>false</disabled>
+        				<blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+        				<blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+        				<triggers/>
+        				<concurrentBuild>false</concurrentBuild>
+        				<builders>
+            				<hudson.tasks.Shell>
+                				<command>echo Hello World with xml!</command>
+            				</hudson.tasks.Shell>
+        				</builders>
+        				<publishers/>
+        				<buildWrappers/>
+        				<displayName>From custom resource XML</displayName>
+    					</project>`,
 					JobDsl: `
 						freeStyleJob('jenkinsjob-sample-dsl') {
 							description('Job created from custom resource with JobDSL')
@@ -354,88 +280,50 @@ var _ = Describe("jenkins job controller", func() {
 						}`,
 				},
 			}
+		})
+
+		It("job with both XML and Dsl", func() {
+			By("creating")
 			Expect(c.Create(context.TODO(), jenkinsJob)).To(Succeed())
 			Eventually(requests, timeout).ShouldNot(Receive(Equal(expectedRequest)))
+			Eventually(func() error {
+				return c.Get(context.TODO(), types.NamespacedName{Name: "test-job-jenkins", Namespace: "default"}, instance)
+			}, timeout).Should(Succeed())
 
-			When("deleting the jenkins job", func() {
-				err := c.Delete(context.TODO(), jenkinsJob)
-				Expect(err).NotTo(HaveOccurred())
-			})
+			By("deleting")
+			Expect(c.Delete(context.TODO(), jenkinsJob)).NotTo(HaveOccurred())
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, jenkinsJob) }, timeout).
+				ShouldNot(Succeed())
 		})
 	})
 
-	Describe("when creating a new JenkinsJob without JobDSL or XML source", func() {
-		var expectedRequest reconcile.Request
+	Describe("fails to reconcile", func() {
 		var jenkinsJob *jenkinsv1alpha1.JenkinsJob
-		var standardObjectkey types.NamespacedName
-		var instance *jenkinsv1alpha1.JenkinsInstance
-		var secret *corev1.Secret
 
 		BeforeEach(func() {
-			standardObjectkey = types.NamespacedName{Name: failingName, Namespace: namespace}
-			expectedRequest = reconcile.Request{NamespacedName: standardObjectkey}
-			instance = &jenkinsv1alpha1.JenkinsInstance{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      failingName,
-					Namespace: namespace,
-				},
-				Spec: jenkinsv1alpha1.JenkinsInstanceSpec{
-					Image:       "dummy/dummy:dummy",
-					Executors:   1,
-					AdminSecret: "dummy",
-					Location:    "dummy",
-					AdminEmail:  "dummy",
-					Service: &jenkinsv1alpha1.ServiceSpec{
-						Name:        "dummy",
-						ServiceType: "NodePort",
-					},
-				},
-				Status: jenkinsv1alpha1.JenkinsInstanceStatus{
-					SetupSecret: failingName,
-					Api:         "http://127.0.0.1:12345",
-					Phase:       "Ready",
-				},
-			}
-			Expect(c.Create(context.TODO(), instance)).To(Succeed())
-
-			secret = &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      failingName,
-					Namespace: namespace,
-				},
-				Type: corev1.SecretTypeOpaque,
-				Data: map[string][]byte{
-
-					"user":     []byte("dummy"),
-					"pass":     []byte("dummy"),
-					"apiToken": []byte("dummy"),
-				},
-			}
-			Expect(c.Create(context.TODO(), secret)).To(Succeed())
-		})
-
-		AfterEach(func() {
-			Expect(c.Delete(context.TODO(), instance)).To(Succeed())
-			Expect(c.Delete(context.TODO(), secret)).To(Succeed())
-		})
-
-		It("does not reconcile", func() {
 			jenkinsJob = &jenkinsv1alpha1.JenkinsJob{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      failingName,
-					Namespace: namespace,
+					Name:      "test-job",
+					Namespace: "default",
 				},
 				Spec: jenkinsv1alpha1.JenkinsJobSpec{
-					JenkinsInstance: failingName,
+					JenkinsInstance: "test-job-jenkins",
 				},
 			}
+		})
+
+		It("job without both XML or Dsl", func() {
+			By("creating")
 			Expect(c.Create(context.TODO(), jenkinsJob)).To(Succeed())
 			Eventually(requests, timeout).ShouldNot(Receive(Equal(expectedRequest)))
+			Eventually(func() error {
+				return c.Get(context.TODO(), types.NamespacedName{Name: "test-job-jenkins", Namespace: "default"}, instance)
+			}, timeout).Should(Succeed())
 
-			When("deleting the jenkins job", func() {
-				err := c.Delete(context.TODO(), jenkinsJob)
-				Expect(err).NotTo(HaveOccurred())
-			})
+			By("deleting")
+			Expect(c.Delete(context.TODO(), jenkinsJob)).NotTo(HaveOccurred())
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, jenkinsJob) }, timeout).
+				ShouldNot(Succeed())
 		})
 	})
 })

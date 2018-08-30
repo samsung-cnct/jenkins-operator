@@ -3,6 +3,7 @@ package util
 import (
 	"errors"
 	"fmt"
+	"github.com/maratoid/jenkins-operator/pkg/test"
 	corev1 "k8s.io/api/core/v1"
 	"net"
 	"net/url"
@@ -75,6 +76,11 @@ func AmRunningInCluster() bool {
 	return kubeServiceHostPresent && kubeServicePortPresent
 }
 
+func AmRunningInTest() bool {
+	_, runningUnderLocalTest := os.LookupEnv("JENKINS_OPERATOR_TESTRUN")
+	return runningUnderLocalTest
+}
+
 // gets the correct endpoint for a given service based on whether code is running in cluster or not
 func GetServiceEndpoint(service *corev1.Service, path string, internalPort int32) (string, error) {
 	var endpoint string
@@ -82,6 +88,8 @@ func GetServiceEndpoint(service *corev1.Service, path string, internalPort int32
 		endpoint = fmt.Sprintf(
 			"http://%s.%s.svc.cluster.local:%d",
 			service.Name, service.Namespace, internalPort)
+	} else if AmRunningInTest() {
+		endpoint = fmt.Sprint(test.GetURL(), "/", path)
 	} else {
 		restConfig, err := config.GetConfig()
 		if err != nil {

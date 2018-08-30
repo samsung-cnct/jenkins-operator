@@ -44,7 +44,8 @@ bin-data:
 
 # Run tests
 test: generate fmt vet manifests
-	go test ./pkg/... ./cmd/... -coverprofile cover.out
+	export JENKINS_OPERATOR_TESTRUN=true; \
+	ginkgo -r ./pkg/... ./cmd/... -coverprofile cover.out
 
 # Build manager binary
 manager-linux-amd64: generate fmt vet
@@ -86,6 +87,7 @@ generate:
 install-dep:
 	go get -u github.com/golang/dep/cmd/dep
 	go get -u github.com/go-bindata/go-bindata/...
+	go install github.com/onsi/ginkgo/ginkgo
 
 # New Dep will just blow away Gopkg, vendor and do a dep init
 new-dep:

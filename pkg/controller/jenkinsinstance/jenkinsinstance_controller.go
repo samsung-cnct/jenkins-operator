@@ -47,6 +47,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"strings"
 	"text/template"
+	"time"
 )
 
 const (
@@ -348,7 +349,7 @@ func (bc *ReconcileJenkinsInstance) Reconcile(request reconcile.Request) (reconc
 
 	// Finally, we update the status block of the JenkinsInstance resource to reflect the
 	// current state of the world
-	err = bc.updateJenkinsInstanceStatus(jenkinsInstance,
+	err = bc.updateJenkinsInstanceStatus(request.NamespacedName,
 		service, adminSecret, jenkinsTokenRequests[request.NamespacedName].ctx)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -359,21 +360,28 @@ func (bc *ReconcileJenkinsInstance) Reconcile(request reconcile.Request) (reconc
 }
 
 // update status fields of the jenkins instance object and emit events
-func (bc *ReconcileJenkinsInstance) updateJenkinsInstanceStatus(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance,
+func (bc *ReconcileJenkinsInstance) updateJenkinsInstanceStatus(jenkinsInstance client.ObjectKey,
 	service *corev1.Service, adminSecret *corev1.Secret, jenkinsApiContext context.Context) error {
 
-	updateSetupSecret := func(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, service *corev1.Service,
+	updateSetupSecret := func(jenkinsInstance client.ObjectKey, service *corev1.Service,
 		adminSecret *corev1.Secret, ctx context.Context) {
 
 		getToken := func() (string, error) {
 			for {
 				select {
 				case <-ctx.Done():
-					return "", fmt.Errorf("JenkinsInstance %s status update cancelled", jenkinsInstance.GetName())
+					return "", fmt.Errorf("JenkinsInstance %s status update cancelled", jenkinsInstance.Name)
 				default:
-					apiToken, err := util.GetJenkinsApiToken(jenkinsInstance, service, adminSecret, JenkinsMasterPort)
+					instance := &jenkinsv1alpha1.JenkinsInstance{}
+					err := bc.Client.Get(context.TODO(), jenkinsInstance, instance)
 					if err != nil {
 						glog.Errorf("Error: %v, retrying", err)
+						time.Sleep(3 * time.Second)
+					}
+					apiToken, err := util.GetJenkinsApiToken(instance, service, adminSecret, JenkinsMasterPort)
+					if err != nil {
+						glog.Errorf("Error: %v, retrying", err)
+						time.Sleep(3 * time.Second)
 					} else {
 						return apiToken, nil
 					}
@@ -383,16 +391,12 @@ func (bc *ReconcileJenkinsInstance) updateJenkinsInstanceStatus(jenkinsInstance 
 
 		apiToken, err := getToken()
 		if err != nil {
-			glog.Errorf("error updating JenkinsInstance %s: %v", jenkinsInstance.GetName(), err)
+			glog.Errorf("error updating JenkinsInstance %s: %v", jenkinsInstance.Name, err)
 			return
 		}
 
 		setupSecret := &corev1.Secret{}
-		err = bc.Client.Get(
-			context.TODO(), types.NewNamespacedNameFromString(
-				fmt.Sprintf("%s%c%s", jenkinsInstance.GetNamespace(), types.Separator,
-					jenkinsInstance.GetName())),
-			setupSecret)
+		err = bc.Client.Get(context.TODO(), jenkinsInstance, setupSecret)
 		if err != nil {
 			glog.Errorf("Error getting setup secret %s: %v", setupSecret.GetName(), err)
 			return
@@ -403,7 +407,7 @@ func (bc *ReconcileJenkinsInstance) updateJenkinsInstanceStatus(jenkinsInstance 
 			setupSecretCopy.Data["apiToken"] = []byte(apiToken)
 			err = bc.Client.Update(context.TODO(), setupSecretCopy)
 			if err != nil {
-				glog.Errorf("Error updating setup secret %s: %v", setupSecret.GetName(), err)
+				glog.Errorf("Error updating setup secret %s: %v", setupSecretCopy.GetName(), err)
 				return
 			}
 		}
@@ -413,12 +417,19 @@ func (bc *ReconcileJenkinsInstance) updateJenkinsInstanceStatus(jenkinsInstance 
 			return
 		}
 
-		doUpdate := (jenkinsInstance.Status.Phase != JenkinsInstancePhaseReady) ||
-			(jenkinsInstance.Status.Api != api) ||
-			(jenkinsInstance.Status.SetupSecret != setupSecret.GetName())
+		instance := &jenkinsv1alpha1.JenkinsInstance{}
+		err = bc.Client.Get(context.TODO(), jenkinsInstance, instance)
+		if err != nil {
+			glog.Errorf("Error getting JenkinsInstance %s: %v", jenkinsInstance.Name, err)
+			return
+		}
+
+		doUpdate := (instance.Status.Phase != JenkinsInstancePhaseReady) ||
+			(instance.Status.Api != api) ||
+			(instance.Status.SetupSecret != setupSecret.GetName())
 
 		if doUpdate {
-			jenkinsInstanceCopy := jenkinsInstance.DeepCopy()
+			jenkinsInstanceCopy := instance.DeepCopy()
 			jenkinsInstanceCopy.Status.Phase = JenkinsInstancePhaseReady
 			jenkinsInstanceCopy.Status.Api = api
 			jenkinsInstanceCopy.Status.SetupSecret = setupSecret.GetName()

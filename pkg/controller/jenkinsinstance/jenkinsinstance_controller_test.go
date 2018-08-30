@@ -19,6 +19,7 @@ package jenkinsinstance
 import (
 	"context"
 	jenkinsv1alpha1 "github.com/maratoid/jenkins-operator/pkg/apis/jenkins/v1alpha1"
+	"github.com/maratoid/jenkins-operator/pkg/test"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
@@ -97,11 +98,18 @@ var _ = Describe("jenkins instance controller", func() {
 
 		err = c.Create(context.TODO(), adminSecret)
 		Expect(err).NotTo(HaveOccurred())
+		Eventually(func() error {
+			return c.Get(context.TODO(), types.NamespacedName{Name: secret, Namespace: namespace}, adminSecret)
+		}, timeout).Should(Succeed())
+
+		test.Setup()
 	})
 
 	AfterEach(func() {
 		err := c.Delete(context.TODO(), adminSecret)
 		Expect(err).NotTo(HaveOccurred())
+
+		test.Teardown()
 
 		time.Sleep(3 * time.Second)
 		close(stop)
