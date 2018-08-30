@@ -17,13 +17,12 @@ limitations under the License.
 package jenkinsjob
 
 import (
-	"log"
-	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/maratoid/jenkins-operator/pkg/apis"
-	"github.com/onsi/gomega"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -32,22 +31,29 @@ import (
 )
 
 var cfg *rest.Config
+var t *envtest.Environment
 
-func TestMain(m *testing.M) {
-	t := &envtest.Environment{
+func TestJenkinsJobController(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecsWithDefaultAndCustomReporters(t, "JenkinsJob Controller Suite", []Reporter{envtest.NewlineReporter{}})
+}
+
+var _ = BeforeSuite(func() {
+	var err error
+
+	t = &envtest.Environment{
 		CRDDirectoryPaths: []string{filepath.Join("..", "..", "..", "config", "crds")},
 	}
+
 	apis.AddToScheme(scheme.Scheme)
 
-	var err error
-	if cfg, err = t.Start(); err != nil {
-		log.Fatal(err)
-	}
+	cfg, err = t.Start()
+	Expect(err).NotTo(HaveOccurred())
+})
 
-	code := m.Run()
+var _ = AfterSuite(func() {
 	t.Stop()
-	os.Exit(code)
-}
+})
 
 // SetupTestReconcile returns a reconcile.Reconcile implementation that delegates to inner and
 // writes the request to requests after Reconcile is finished.
@@ -62,10 +68,10 @@ func SetupTestReconcile(inner reconcile.Reconciler) (reconcile.Reconciler, chan 
 }
 
 // StartTestManager adds recFn
-func StartTestManager(mgr manager.Manager, g *gomega.GomegaWithT) chan struct{} {
+func StartTestManager(mgr manager.Manager) chan struct{} {
 	stop := make(chan struct{})
 	go func() {
-		g.Expect(mgr.Start(stop)).NotTo(gomega.HaveOccurred())
+		Expect(mgr.Start(stop)).To(Succeed())
 	}()
 	return stop
 }

@@ -82,7 +82,7 @@ func jenkins_v1alpha1_jenkinsinstanceYaml() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "jenkins_v1alpha1_jenkinsinstance.yaml", size: 3010, mode: os.FileMode(420), modTime: time.Unix(1535419248, 0)}
+	info := bindataFileInfo{name: "jenkins_v1alpha1_jenkinsinstance.yaml", size: 3010, mode: os.FileMode(420), modTime: time.Unix(1535596816, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -102,7 +102,7 @@ func jenkins_v1alpha1_jenkinsjobYaml() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "jenkins_v1alpha1_jenkinsjob.yaml", size: 1526, mode: os.FileMode(420), modTime: time.Unix(1535419248, 0)}
+	info := bindataFileInfo{name: "jenkins_v1alpha1_jenkinsjob.yaml", size: 1526, mode: os.FileMode(420), modTime: time.Unix(1535596816, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }

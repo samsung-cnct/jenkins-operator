@@ -99,7 +99,8 @@ func GetServiceEndpoint(service *corev1.Service, path string, internalPort int32
 		}
 
 		if nodePort == 0 {
-			return "", errors.New("could not find corresponding node port")
+			return "", errors.New("could not find corresponding node port, service type must be 'NodePort' " +
+				"when running controller out of cluster")
 		}
 
 		endpoint = fmt.Sprintf("http://%s:%d/%s", host, nodePort, path)

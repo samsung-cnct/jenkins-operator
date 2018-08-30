@@ -25,7 +25,6 @@ import (
 	jenkinsv1alpha1 "github.com/maratoid/jenkins-operator/pkg/apis/jenkins/v1alpha1"
 	"github.com/maratoid/jenkins-operator/pkg/bindata"
 	"github.com/maratoid/jenkins-operator/pkg/util"
-	"gopkg.in/matryer/try.v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/api/extensions/v1beta1"
@@ -48,7 +47,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"strings"
 	"text/template"
-	"time"
 )
 
 const (
@@ -64,6 +62,10 @@ const (
 	// MessageResourceSynced is the message used for an Event fired when a JenkinsInstance
 	// is synced successfully
 	MessageResourceSynced = "JenkinsInstance synced successfully"
+)
+
+const (
+	JenkinsInstancePhaseReady = "Ready"
 )
 
 const (
@@ -130,6 +132,42 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
+	// Watch an Ingress created by JenkinsInstance - change this for objects you create
+	err = c.Watch(&source.Kind{Type: &v1beta1.Ingress{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &jenkinsv1alpha1.JenkinsInstance{},
+	})
+	if err != nil {
+		return err
+	}
+
+	// Watch a Cluster RoleBinding created by JenkinsInstance - change this for objects you create
+	err = c.Watch(&source.Kind{Type: &authv1.ClusterRoleBinding{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &jenkinsv1alpha1.JenkinsInstance{},
+	})
+	if err != nil {
+		return err
+	}
+
+	// Watch a ServiceAccount created by JenkinsInstance - change this for objects you create
+	err = c.Watch(&source.Kind{Type: &corev1.ServiceAccount{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &jenkinsv1alpha1.JenkinsInstance{},
+	})
+	if err != nil {
+		return err
+	}
+
+	// Watch a Networkpolicy created by JenkinsInstance - change this for objects you create
+	err = c.Watch(&source.Kind{Type: &netv1.NetworkPolicy{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &jenkinsv1alpha1.JenkinsInstance{},
+	})
+	if err != nil {
+		return err
+	}
+
 	// Watch Secret resources not owned by the JenkinsInstance change
 	// This is needed for re-loading login information from the pre-provided secret
 	// When admin login secret changes, Watch will list all JenkinsInstances
@@ -179,6 +217,13 @@ type ReconcileJenkinsInstance struct {
 	scheme *runtime.Scheme
 }
 
+type JenkinsTokenRequest struct {
+	ctx        context.Context
+	cancelFunc context.CancelFunc
+}
+
+var jenkinsTokenRequests map[types.NamespacedName]JenkinsTokenRequest = map[types.NamespacedName]JenkinsTokenRequest{}
+
 // Reconcile reads that state of the cluster for a JenkinsInstance object and makes changes based on the state read
 // and what is in the JenkinsInstance.Spec
 // Automatically generate RBAC rules to allow the Controller to read and write Deployments
@@ -196,9 +241,23 @@ func (bc *ReconcileJenkinsInstance) Reconcile(request reconcile.Request) (reconc
 	if err != nil {
 		if errors.IsNotFound(err) {
 			glog.Errorf("JenkinsInstance key '%s' in work queue no longer exists", request.String())
+
+			if val, ok := jenkinsTokenRequests[request.NamespacedName]; ok {
+				val.cancelFunc()
+				delete(jenkinsTokenRequests, request.NamespacedName)
+			}
+
 			return reconcile.Result{}, nil
 		}
 		return reconcile.Result{}, err
+	}
+
+	if _, ok := jenkinsTokenRequests[request.NamespacedName]; !ok {
+		ctx, cancelFunc := context.WithCancel(context.Background())
+		jenkinsTokenRequests[request.NamespacedName] = JenkinsTokenRequest{
+			ctx:        ctx,
+			cancelFunc: cancelFunc,
+		}
 	}
 
 	adminSecretName := jenkinsInstance.Spec.AdminSecret
@@ -239,7 +298,7 @@ func (bc *ReconcileJenkinsInstance) Reconcile(request reconcile.Request) (reconc
 		return reconcile.Result{}, err
 	}
 
-	deployment, err := bc.newDeployment(jenkinsInstance)
+	_, err = bc.newDeployment(jenkinsInstance)
 	// If an error occurs during Get/Create, we'll requeue the item so we can
 	// attempt processing again later. This could have been caused by a
 	// temporary network failure, or any other transient reason.
@@ -289,7 +348,8 @@ func (bc *ReconcileJenkinsInstance) Reconcile(request reconcile.Request) (reconc
 
 	// Finally, we update the status block of the JenkinsInstance resource to reflect the
 	// current state of the world
-	err = bc.updateJenkinsInstanceStatus(jenkinsInstance, deployment, service, adminSecret)
+	err = bc.updateJenkinsInstanceStatus(jenkinsInstance,
+		service, adminSecret, jenkinsTokenRequests[request.NamespacedName].ctx)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -299,72 +359,88 @@ func (bc *ReconcileJenkinsInstance) Reconcile(request reconcile.Request) (reconc
 }
 
 // update status fields of the jenkins instance object and emit events
-func (bc *ReconcileJenkinsInstance) updateJenkinsInstanceStatus(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, deployment *appsv1.Deployment, service *corev1.Service, adminSecret *corev1.Secret) error {
-	// NEVER modify objects from the store. It's a read-only, local cache.
-	// You can use DeepCopy() to make a deep copy of original object and modify this copy
-	// Or create a copy manually for better performance
-	jenkinsInstanceCopy := jenkinsInstance.DeepCopy()
+func (bc *ReconcileJenkinsInstance) updateJenkinsInstanceStatus(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance,
+	service *corev1.Service, adminSecret *corev1.Secret, jenkinsApiContext context.Context) error {
 
-	var apiToken string
-	err := try.Do(func(attempt int) (bool, error) {
+	updateSetupSecret := func(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, service *corev1.Service,
+		adminSecret *corev1.Secret, ctx context.Context) {
 
-		// use admin secret data to get the user configuration page and parse out an api token
-		var err error
-		apiToken, err = util.GetJenkinsApiToken(jenkinsInstance, service, adminSecret, JenkinsMasterPort)
-		if err != nil {
-			glog.Errorf("Error: %v, retrying", err)
-			time.Sleep(10 * time.Second) // wait 10 seconds
+		getToken := func() (string, error) {
+			for {
+				select {
+				case <-ctx.Done():
+					return "", fmt.Errorf("JenkinsInstance %s status update cancelled", jenkinsInstance.GetName())
+				default:
+					apiToken, err := util.GetJenkinsApiToken(jenkinsInstance, service, adminSecret, JenkinsMasterPort)
+					if err != nil {
+						glog.Errorf("Error: %v, retrying", err)
+					} else {
+						return apiToken, nil
+					}
+				}
+			}
 		}
 
-		return attempt < 5, err
-	})
+		apiToken, err := getToken()
+		if err != nil {
+			glog.Errorf("error updating JenkinsInstance %s: %v", jenkinsInstance.GetName(), err)
+			return
+		}
 
-	if err != nil {
-		glog.Errorf("Error: %v", err)
-		return err
+		setupSecret := &corev1.Secret{}
+		err = bc.Client.Get(
+			context.TODO(), types.NewNamespacedNameFromString(
+				fmt.Sprintf("%s%c%s", jenkinsInstance.GetNamespace(), types.Separator,
+					jenkinsInstance.GetName())),
+			setupSecret)
+		if err != nil {
+			glog.Errorf("Error getting setup secret %s: %v", setupSecret.GetName(), err)
+			return
+		}
+
+		if string(setupSecret.Data["apiToken"][:]) != apiToken {
+			setupSecretCopy := setupSecret.DeepCopy()
+			setupSecretCopy.Data["apiToken"] = []byte(apiToken)
+			err = bc.Client.Update(context.TODO(), setupSecretCopy)
+			if err != nil {
+				glog.Errorf("Error updating setup secret %s: %v", setupSecret.GetName(), err)
+				return
+			}
+		}
+
+		api, err := util.GetServiceEndpoint(service, "", 8080)
+		if err != nil {
+			return
+		}
+
+		doUpdate := (jenkinsInstance.Status.Phase != JenkinsInstancePhaseReady) ||
+			(jenkinsInstance.Status.Api != api) ||
+			(jenkinsInstance.Status.SetupSecret != setupSecret.GetName())
+
+		if doUpdate {
+			jenkinsInstanceCopy := jenkinsInstance.DeepCopy()
+			jenkinsInstanceCopy.Status.Phase = JenkinsInstancePhaseReady
+			jenkinsInstanceCopy.Status.Api = api
+			jenkinsInstanceCopy.Status.SetupSecret = setupSecret.GetName()
+
+			err = bc.Client.Update(context.TODO(), jenkinsInstanceCopy)
+			if err != nil {
+				glog.Errorf("Error updating JenkinsInstance %s: %v", jenkinsInstanceCopy.GetName(), err)
+				return
+			}
+		}
 	}
 
-	setupSecret := &corev1.Secret{}
-	err = bc.Client.Get(
-		context.TODO(), types.NewNamespacedNameFromString(
-			fmt.Sprintf("%s%c%s", jenkinsInstance.GetNamespace(), types.Separator,
-				jenkinsInstance.GetName())),
-		setupSecret)
-	if err != nil {
-		glog.Errorf("Error getting setup secret %s: %v", setupSecret.GetName(), err)
-		return err
-	}
-
-	setupSecretCopy := setupSecret.DeepCopy()
-	setupSecretCopy.Data["apiToken"] = []byte(apiToken)
-	err = bc.Client.Update(context.TODO(), setupSecretCopy)
-	if err != nil {
-		glog.Errorf("Error updating setup secret %s: %v", setupSecret.GetName(), err)
-		return err
-	}
-
-	// TODO: update other status fields
-	api, err := util.GetServiceEndpoint(service, "", 8080)
-	if err != nil {
-		return err
-	}
-
-	jenkinsInstanceCopy.Status.Api = api
-	jenkinsInstanceCopy.Status.SetupSecret = setupSecretCopy.GetName()
-	jenkinsInstanceCopy.Status.Phase = "Ready"
-
-	// Until #38113 is merged, we must use Update instead of UpdateStatus to
-	// update the Status block of the JenkinsInstanceC resource. UpdateStatus will not
-	// allow changes to the Spec of the resource, which is ideal for ensuring
-	// nothing other than resource status has been updated.
-	err = bc.Client.Update(context.TODO(), jenkinsInstanceCopy)
-	return err
+	// launch token update
+	go updateSetupSecret(jenkinsInstance, service, adminSecret, jenkinsApiContext)
+	return nil
 }
 
 // newSetupSecret creates an admin password secret for a JenkinsInstance resource. It also sets
 // the appropriate OwnerReferences on the resource so handleObject can discover
 // the JenkinsInstance resource that 'owns' it.
-func (bc *ReconcileJenkinsInstance) newSetupSecret(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, adminSecret *corev1.Secret) (*corev1.Secret, error) {
+func (bc *ReconcileJenkinsInstance) newSetupSecret(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance,
+	adminSecret *corev1.Secret) (*corev1.Secret, error) {
 	exists := false
 	setupSecret := &corev1.Secret{}
 	err := bc.Client.Get(

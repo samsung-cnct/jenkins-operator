@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/golang/glog"
 	jenkinsv1alpha1 "github.com/maratoid/jenkins-operator/pkg/apis/jenkins/v1alpha1"
+	"github.com/maratoid/jenkins-operator/pkg/controller/jenkinsinstance"
 	"github.com/maratoid/jenkins-operator/pkg/util"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -57,6 +58,10 @@ const (
 
 	// Finalizer name
 	Finalizer = "jenkinsjobs.jenkins.jenkinsoperator.maratoid.github.com"
+)
+
+const (
+	JenkinsJobPhaseReady = "Ready"
 )
 
 // Add creates a new JenkinsJob Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
@@ -278,7 +283,7 @@ func (bc *ReconcileJenkinsJob) updateJenkinsJobStatus(jenkinsJob *jenkinsv1alpha
 	jenkinsJobCopy := jenkinsJob.DeepCopy()
 
 	// set sync phase
-	jenkinsJobCopy.Status.Phase = "Ready"
+	jenkinsJobCopy.Status.Phase = JenkinsJobPhaseReady
 
 	// Until #38113 is merged, we must use Update instead of UpdateStatus to
 	// update the Status block of the JenkinsInstance resource. UpdateStatus will not
@@ -330,7 +335,7 @@ func (bc *ReconcileJenkinsJob) getJenkinsInstance(jenkinsJob *jenkinsv1alpha1.Je
 
 	// make sure the jenkins instance is ready
 	// Otherwise re-queue
-	if jenkinsInstance.Status.Phase != "Ready" {
+	if jenkinsInstance.Status.Phase != jenkinsinstance.JenkinsInstancePhaseReady {
 		return nil, fmt.Errorf(
 			"JenkinsInstance %s referred to by JenkinsJob %s is not ready",
 			jenkinsInstanceName,
