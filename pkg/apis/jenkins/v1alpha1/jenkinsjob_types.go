@@ -23,6 +23,65 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+const (
+	JenkinsJobSecretUserPass = "usernamePassword"
+	JenkinsJobSecretText     = "secretText"
+	JenkinsJobSecretFile     = "secretFile"
+	JenkinsJobSecretCert     = "certificate"
+)
+
+const (
+	JenkinsJobSecretUsernameKey    = "username"
+	JenkinsJobSecretPasswordKey    = "password"
+	JenkinsJobSecretFileKey        = "data"
+	JenkinsJobSecretTextKey        = "text"
+	JenkinsJobSecretCertificateKey = "certificate"
+)
+
+// JenkinsSecret spec defines secret data to be used by JenkinsJob
+type JenkinsCredentialSpec struct {
+	// Id of credential to be created
+	// +kubebuilder:validation:Pattern=^[a-z][a-z-]*[a-z]
+	Credential string `json:"credential,omitempty"`
+	// credential type
+	// +kubebuilder:validation:Pattern=usernamePassword|secretText|serviceaccount|vaultgithub|vaultapprole|vaulttoken
+	CredentialType string `json:"credentialtype,omitempty"`
+
+	// name of secret that contains credential data
+	Secret string `json:"secret,omitempty"`
+
+	// map of credential fields to kubernetes secret data fields (from the Secret value above)
+	// in the <credential field>:<kubernetes secret field>
+	// format
+	// ---
+	// For secretFile:
+	// filename - name of the file
+	// data - file data
+	// ie:
+	// filename: name-of-file
+	// data: data-of-file
+	// ---
+	// for usernamePassword:
+	// username - user name
+	// password - password
+	// ie:
+	// username: name-of-user
+	// password: userpass
+	// ---
+	// for secretText:
+	// text - secret text data
+	// ie:
+	// text: secrettext
+	// ---
+	// for certificate:
+	// password - certificate password
+	// certificate - PKCS#12 certificate data
+	// ie:
+	// password: certpw
+	// certificate: pkcs-cert
+	SecretData map[string]string `json:"secretdata,omitempty"`
+}
+
 // JenkinsJobSpec defines the desired state of JenkinsJob
 type JenkinsJobSpec struct {
 	// ID of the JenkinsServer instance to install this plugin in
@@ -33,12 +92,15 @@ type JenkinsJobSpec struct {
 
 	// Content of a jenkins job in form of Jenkins JobDSL
 	JobDsl string `json:"jobdsl,omitempty"`
+
+	// Jenkins secret data
+	Credentials []JenkinsCredentialSpec `json:"credentials,omitempty"`
 }
 
 // JenkinsJobStatus defines the observed state of JenkinsJob
 type JenkinsJobStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// state if jenkins server instance
+	Phase string `json:"phase"`
 }
 
 // +genclient

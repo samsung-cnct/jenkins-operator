@@ -22,6 +22,21 @@ spec:
           type: object
         spec:
           properties:
+            credentials:
+              items:
+                properties:
+                  credential:
+                    pattern: ^[a-z][a-z-]*[a-z]
+                    type: string
+                  credentialtype:
+                    pattern: usernamePassword|secretText|serviceaccount|vaultgithub|vaultapprole|vaulttoken
+                    type: string
+                  secret:
+                    type: string
+                  secretdata:
+                    type: object
+                type: object
+              type: array
             jenkinsinstance:
               type: string
             jobdsl:
@@ -30,6 +45,11 @@ spec:
               type: string
           type: object
         status:
+          properties:
+            phase:
+              type: string
+          required:
+          - phase
           type: object
       type: object
   version: v1alpha1

@@ -6,7 +6,6 @@ metadata:
   name: jenkinsinstance-sample
 spec:
   image: "jenkins/jenkins:lts"
-  name: operatedjenkins
   env:
     SOME_ENV: "test"
   plugins:
@@ -16,7 +15,6 @@ spec:
     cnct.io/annotation: "test"
     cnct.io/other-annotation: "other test"
   executors: 2
-  replicas: 1
   adminsecret: jenkins-test
   location: https://jenkins.example.com
   adminemail: admin@example.com
