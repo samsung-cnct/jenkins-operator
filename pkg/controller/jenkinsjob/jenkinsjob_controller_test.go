@@ -119,7 +119,13 @@ var _ = Describe("jenkins job controller", func() {
 
 	AfterEach(func() {
 		Expect(c.Delete(context.TODO(), instance)).To(Succeed())
+		Eventually(func() error {
+			return c.Get(context.TODO(), types.NamespacedName{Name: "test-job-jenkins", Namespace: "default"}, instance)
+		}, timeout).ShouldNot(Succeed())
 		Expect(c.Delete(context.TODO(), secret)).To(Succeed())
+		Eventually(func() error {
+			return c.Get(context.TODO(), types.NamespacedName{Name: "test-job-secret", Namespace: "default"}, secret)
+		}, timeout).ShouldNot(Succeed())
 
 		time.Sleep(3 * time.Second)
 		close(stop)
@@ -167,9 +173,6 @@ var _ = Describe("jenkins job controller", func() {
 			By("creating")
 			Expect(c.Create(context.TODO(), jenkinsJob)).To(Succeed())
 			Eventually(requests, timeout).Should(Receive(Equal(expectedRequest)))
-			Eventually(func() error {
-				return c.Get(context.TODO(), types.NamespacedName{Name: "test-job-jenkins", Namespace: "default"}, instance)
-			}, timeout).Should(Succeed())
 
 			By("deleting")
 			Expect(c.Delete(context.TODO(), jenkinsJob)).NotTo(HaveOccurred())
@@ -201,7 +204,7 @@ var _ = Describe("jenkins job controller", func() {
 				Spec: jenkinsv1alpha1.JenkinsJobSpec{
 					JenkinsInstance: "test-job-jenkins",
 					JobDsl: `
-						freeStyleJob('jenkinsjob-sample-dsl') {
+						freeStyleJob('test-job') {
 							description('Job created from custom resource with JobDSL')
 							displayName('From custom resource DSL')
 							steps {
@@ -216,9 +219,6 @@ var _ = Describe("jenkins job controller", func() {
 			By("creating")
 			Expect(c.Create(context.TODO(), jenkinsJob)).To(Succeed())
 			Eventually(requests, timeout).Should(Receive(Equal(expectedRequest)))
-			Eventually(func() error {
-				return c.Get(context.TODO(), types.NamespacedName{Name: "test-job-jenkins", Namespace: "default"}, instance)
-			}, timeout).Should(Succeed())
 
 			By("deleting")
 			Expect(c.Delete(context.TODO(), jenkinsJob)).NotTo(HaveOccurred())
@@ -286,9 +286,6 @@ var _ = Describe("jenkins job controller", func() {
 			By("creating")
 			Expect(c.Create(context.TODO(), jenkinsJob)).To(Succeed())
 			Eventually(requests, timeout).ShouldNot(Receive(Equal(expectedRequest)))
-			Eventually(func() error {
-				return c.Get(context.TODO(), types.NamespacedName{Name: "test-job-jenkins", Namespace: "default"}, instance)
-			}, timeout).Should(Succeed())
 
 			By("deleting")
 			Expect(c.Delete(context.TODO(), jenkinsJob)).NotTo(HaveOccurred())
@@ -316,9 +313,6 @@ var _ = Describe("jenkins job controller", func() {
 			By("creating")
 			Expect(c.Create(context.TODO(), jenkinsJob)).To(Succeed())
 			Eventually(requests, timeout).ShouldNot(Receive(Equal(expectedRequest)))
-			Eventually(func() error {
-				return c.Get(context.TODO(), types.NamespacedName{Name: "test-job-jenkins", Namespace: "default"}, instance)
-			}, timeout).Should(Succeed())
 
 			By("deleting")
 			Expect(c.Delete(context.TODO(), jenkinsJob)).NotTo(HaveOccurred())

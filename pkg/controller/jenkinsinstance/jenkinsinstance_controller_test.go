@@ -106,8 +106,10 @@ var _ = Describe("jenkins instance controller", func() {
 	})
 
 	AfterEach(func() {
-		err := c.Delete(context.TODO(), adminSecret)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(c.Delete(context.TODO(), adminSecret)).NotTo(HaveOccurred())
+		Eventually(func() error {
+			return c.Get(context.TODO(), types.NamespacedName{Name: secret, Namespace: namespace}, adminSecret)
+		}, timeout).ShouldNot(Succeed())
 
 		test.Teardown()
 
@@ -115,7 +117,7 @@ var _ = Describe("jenkins instance controller", func() {
 		close(stop)
 	})
 
-	Describe("when creating a new JenkinsInstance resource without existing PVC", func() {
+	Describe("reconciles", func() {
 		var instance *jenkinsv1alpha1.JenkinsInstance
 		var expectedRequest reconcile.Request
 		var standardObjectkey types.NamespacedName
@@ -182,10 +184,14 @@ var _ = Describe("jenkins instance controller", func() {
 
 			Expect(c.Create(context.TODO(), instance)).To(Succeed())
 			Eventually(requests, timeout).Should(Receive(Equal(expectedRequest)))
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, instance) }, timeout).
+				Should(Succeed())
 		})
 
 		AfterEach(func() {
 			Expect(c.Delete(context.TODO(), instance)).To(Succeed())
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, instance) }, timeout).
+				ShouldNot(Succeed())
 
 			// manually delete all objects, since garbage collection is not enabled in test control plane
 			setupSecret := &corev1.Secret{}
@@ -211,21 +217,37 @@ var _ = Describe("jenkins instance controller", func() {
 				Should(Succeed())
 
 			Eventually(func() error { return c.Delete(context.TODO(), setupSecret) }, timeout).Should(Succeed())
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, setupSecret) }, timeout).
+				ShouldNot(Succeed())
 			Eventually(func() error { return c.Delete(context.TODO(), service) }, timeout).Should(Succeed())
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, service) }, timeout).
+				ShouldNot(Succeed())
 			Eventually(func() error { return c.Delete(context.TODO(), ingress) }, timeout).Should(Succeed())
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, ingress) }, timeout).
+				ShouldNot(Succeed())
 			Eventually(func() error { return c.Delete(context.TODO(), serviceAccount) }, timeout).Should(Succeed())
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, serviceAccount) }, timeout).
+				ShouldNot(Succeed())
 			Eventually(func() error { return c.Delete(context.TODO(), policy) }, timeout).Should(Succeed())
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, policy) }, timeout).
+				ShouldNot(Succeed())
 			Eventually(func() error { return c.Delete(context.TODO(), pvc) }, timeout).Should(Succeed())
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, pvc) }, timeout).
+				ShouldNot(Succeed())
 			Eventually(func() error { return c.Delete(context.TODO(), deployment) }, timeout).Should(Succeed())
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, deployment) }, timeout).
+				ShouldNot(Succeed())
 		})
 
-		It("reconciles created", func() {
+		It("created", func() {
 			Context("Secret", func() {
 				setupSecret := &corev1.Secret{}
-				Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, setupSecret) }, timeout).
-					Should(Succeed())
+				When("creating", func() {
+					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, setupSecret) }, timeout).
+						Should(Succeed())
+				})
 
-				When("deleting the secret", func() {
+				When("deleting", func() {
 					Expect(c.Delete(context.TODO(), setupSecret)).To(Succeed())
 					Eventually(requests, timeout).Should(Receive(Equal(expectedRequest)))
 					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, setupSecret) }, timeout).Should(Succeed())
@@ -234,10 +256,12 @@ var _ = Describe("jenkins instance controller", func() {
 
 			Context("Service", func() {
 				service := &corev1.Service{}
-				Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, service) }, timeout).
-					Should(Succeed())
+				When("creating", func() {
+					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, service) }, timeout).
+						Should(Succeed())
+				})
 
-				When("deleting the service", func() {
+				When("deleting", func() {
 					Expect(c.Delete(context.TODO(), service)).To(Succeed())
 					Eventually(requests, timeout).Should(Receive(Equal(expectedRequest)))
 					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, service) }, timeout).Should(Succeed())
@@ -246,10 +270,12 @@ var _ = Describe("jenkins instance controller", func() {
 
 			Context("Ingress", func() {
 				ingress := &v1beta1.Ingress{}
-				Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, ingress) }, timeout).
-					Should(Succeed())
+				When("creating", func() {
+					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, ingress) }, timeout).
+						Should(Succeed())
+				})
 
-				When("deleting the ingress", func() {
+				When("deleting", func() {
 					Expect(c.Delete(context.TODO(), ingress)).To(Succeed())
 					Eventually(requests, timeout).Should(Receive(Equal(expectedRequest)))
 					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, ingress) }, timeout).Should(Succeed())
@@ -258,10 +284,12 @@ var _ = Describe("jenkins instance controller", func() {
 
 			Context("ServiceAccount", func() {
 				serviceAccount := &corev1.ServiceAccount{}
-				Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, serviceAccount) }, timeout).
-					Should(Succeed())
+				When("creating", func() {
+					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, serviceAccount) }, timeout).
+						Should(Succeed())
+				})
 
-				When("deleting the service account", func() {
+				When("deleting", func() {
 					Expect(c.Delete(context.TODO(), serviceAccount)).To(Succeed())
 					Eventually(requests, timeout).Should(Receive(Equal(expectedRequest)))
 					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, serviceAccount) }, timeout).Should(Succeed())
@@ -270,10 +298,12 @@ var _ = Describe("jenkins instance controller", func() {
 
 			Context("NetworkPolicy", func() {
 				policy := &netv1.NetworkPolicy{}
-				Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, policy) }, timeout).
-					Should(Succeed())
+				When("creating", func() {
+					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, policy) }, timeout).
+						Should(Succeed())
+				})
 
-				When("deleting the network policy", func() {
+				When("deleting", func() {
 					Expect(c.Delete(context.TODO(), policy)).To(Succeed())
 					Eventually(requests, timeout).Should(Receive(Equal(expectedRequest)))
 					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, policy) }, timeout).Should(Succeed())
@@ -282,10 +312,12 @@ var _ = Describe("jenkins instance controller", func() {
 
 			Context("PersistentVolumeClaim", func() {
 				pvc := &corev1.PersistentVolumeClaim{}
-				Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, pvc) }, timeout).
-					Should(Succeed())
+				When("creating", func() {
+					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, pvc) }, timeout).
+						Should(Succeed())
+				})
 
-				When("deleting the pvc", func() {
+				When("deleting", func() {
 					Expect(c.Delete(context.TODO(), pvc)).To(Succeed())
 					Eventually(requests, timeout).Should(Receive(Equal(expectedRequest)))
 					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, pvc) }, timeout).Should(Succeed())
@@ -294,10 +326,12 @@ var _ = Describe("jenkins instance controller", func() {
 
 			Context("Deployment", func() {
 				deployment := &appsv1.Deployment{}
-				Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, deployment) }, timeout).
-					Should(Succeed())
+				When("creating", func() {
+					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, deployment) }, timeout).
+						Should(Succeed())
+				})
 
-				When("deleting the deployment", func() {
+				When("deleting", func() {
 					Expect(c.Delete(context.TODO(), deployment)).To(Succeed())
 					Eventually(requests, timeout).Should(Receive(Equal(expectedRequest)))
 					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, deployment) }, timeout).Should(Succeed())
@@ -305,7 +339,7 @@ var _ = Describe("jenkins instance controller", func() {
 			})
 		})
 
-		It("reconciles changes to pre-existing secret with created secret", func() {
+		It("changes to pre-existing secret with created secret", func() {
 			preExistingSecret := &corev1.Secret{}
 			Eventually(func() error {
 				return c.Get(context.TODO(), types.NamespacedName{Name: secret, Namespace: namespace}, preExistingSecret)
@@ -318,7 +352,7 @@ var _ = Describe("jenkins instance controller", func() {
 		})
 	})
 
-	Describe("when creating a new JenkinsInstance resource with existing PVC", func() {
+	Describe("reconciles, with existing PVC", func() {
 		var instance *jenkinsv1alpha1.JenkinsInstance
 		var pvc *corev1.PersistentVolumeClaim
 		var expectedRequest reconcile.Request
@@ -384,12 +418,19 @@ var _ = Describe("jenkins instance controller", func() {
 			}
 
 			Expect(c.Create(context.TODO(), pvc)).To(Succeed())
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, pvc) }, timeout).
+				Should(Succeed())
+
 			Expect(c.Create(context.TODO(), instance)).To(Succeed())
 			Eventually(requests, timeout).Should(Receive(Equal(expectedRequest)))
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, instance) }, timeout).
+				Should(Succeed())
 		})
 
 		AfterEach(func() {
 			Expect(c.Delete(context.TODO(), instance)).To(Succeed())
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, instance) }, timeout).
+				ShouldNot(Succeed())
 
 			// manually delete all objects, since garbage collection is not enabled in test control plane
 			setupSecret := &corev1.Secret{}
@@ -412,21 +453,37 @@ var _ = Describe("jenkins instance controller", func() {
 				Should(Succeed())
 
 			Eventually(func() error { return c.Delete(context.TODO(), setupSecret) }, timeout).Should(Succeed())
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, setupSecret) }, timeout).
+				ShouldNot(Succeed())
 			Eventually(func() error { return c.Delete(context.TODO(), service) }, timeout).Should(Succeed())
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, service) }, timeout).
+				ShouldNot(Succeed())
 			Eventually(func() error { return c.Delete(context.TODO(), ingress) }, timeout).Should(Succeed())
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, ingress) }, timeout).
+				ShouldNot(Succeed())
 			Eventually(func() error { return c.Delete(context.TODO(), serviceAccount) }, timeout).Should(Succeed())
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, serviceAccount) }, timeout).
+				ShouldNot(Succeed())
 			Eventually(func() error { return c.Delete(context.TODO(), policy) }, timeout).Should(Succeed())
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, policy) }, timeout).
+				ShouldNot(Succeed())
 			Eventually(func() error { return c.Delete(context.TODO(), pvc) }, timeout).Should(Succeed())
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, pvc) }, timeout).
+				ShouldNot(Succeed())
 			Eventually(func() error { return c.Delete(context.TODO(), deployment) }, timeout).Should(Succeed())
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, deployment) }, timeout).
+				ShouldNot(Succeed())
 		})
 
-		It("reconciles created", func() {
+		It("created", func() {
 			Context("Secret", func() {
 				setupSecret := &corev1.Secret{}
-				Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, setupSecret) }, timeout).
-					Should(Succeed())
+				When("creating", func() {
+					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, setupSecret) }, timeout).
+						Should(Succeed())
+				})
 
-				When("deleting the secret", func() {
+				When("deleting", func() {
 					Expect(c.Delete(context.TODO(), setupSecret)).To(Succeed())
 					Eventually(requests, timeout).Should(Receive(Equal(expectedRequest)))
 					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, setupSecret) }, timeout).Should(Succeed())
@@ -435,10 +492,12 @@ var _ = Describe("jenkins instance controller", func() {
 
 			Context("Service", func() {
 				service := &corev1.Service{}
-				Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, service) }, timeout).
-					Should(Succeed())
+				When("creating", func() {
+					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, service) }, timeout).
+						Should(Succeed())
+				})
 
-				When("deleting the service", func() {
+				When("deleting", func() {
 					Expect(c.Delete(context.TODO(), service)).To(Succeed())
 					Eventually(requests, timeout).Should(Receive(Equal(expectedRequest)))
 					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, service) }, timeout).Should(Succeed())
@@ -447,10 +506,12 @@ var _ = Describe("jenkins instance controller", func() {
 
 			Context("Ingress", func() {
 				ingress := &v1beta1.Ingress{}
-				Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, ingress) }, timeout).
-					Should(Succeed())
+				When("creating", func() {
+					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, ingress) }, timeout).
+						Should(Succeed())
+				})
 
-				When("deleting the ingress", func() {
+				When("deleting", func() {
 					Expect(c.Delete(context.TODO(), ingress)).To(Succeed())
 					Eventually(requests, timeout).Should(Receive(Equal(expectedRequest)))
 					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, ingress) }, timeout).Should(Succeed())
@@ -459,10 +520,12 @@ var _ = Describe("jenkins instance controller", func() {
 
 			Context("ServiceAccount", func() {
 				serviceAccount := &corev1.ServiceAccount{}
-				Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, serviceAccount) }, timeout).
-					Should(Succeed())
+				When("creating", func() {
+					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, serviceAccount) }, timeout).
+						Should(Succeed())
+				})
 
-				When("deleting the service account", func() {
+				When("deleting", func() {
 					Expect(c.Delete(context.TODO(), serviceAccount)).To(Succeed())
 					Eventually(requests, timeout).Should(Receive(Equal(expectedRequest)))
 					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, serviceAccount) }, timeout).Should(Succeed())
@@ -471,10 +534,12 @@ var _ = Describe("jenkins instance controller", func() {
 
 			Context("NetworkPolicy", func() {
 				policy := &netv1.NetworkPolicy{}
-				Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, policy) }, timeout).
-					Should(Succeed())
+				When("creating", func() {
+					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, policy) }, timeout).
+						Should(Succeed())
+				})
 
-				When("deleting the network policy", func() {
+				When("deleting", func() {
 					Expect(c.Delete(context.TODO(), policy)).To(Succeed())
 					Eventually(requests, timeout).Should(Receive(Equal(expectedRequest)))
 					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, policy) }, timeout).Should(Succeed())
@@ -483,10 +548,12 @@ var _ = Describe("jenkins instance controller", func() {
 
 			Context("Deployment", func() {
 				deployment := &appsv1.Deployment{}
-				Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, deployment) }, timeout).
-					Should(Succeed())
+				When("creating", func() {
+					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, deployment) }, timeout).
+						Should(Succeed())
+				})
 
-				When("deleting the deployment", func() {
+				When("deleting", func() {
 					Expect(c.Delete(context.TODO(), deployment)).To(Succeed())
 					Eventually(requests, timeout).Should(Receive(Equal(expectedRequest)))
 					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, deployment) }, timeout).Should(Succeed())
