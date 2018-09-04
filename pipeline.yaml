@@ -1,0 +1,14 @@
+type: chart
+builds:
+  - image: samsung_cnct/jenkins-operator
+    context: jenkins-operator
+    chart: jenkins-operator
+    value: image.repository
+    dockerContext: .
+deployments:
+  - chart: jenkins-operator
+    timeout: 600
+    retries: 2
+    release: jenkins-operator
+prod:
+  doDeploy: none

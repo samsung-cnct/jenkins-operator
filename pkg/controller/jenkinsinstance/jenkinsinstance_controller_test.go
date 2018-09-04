@@ -39,6 +39,7 @@ import (
 const (
 	timeout       = time.Second * 15
 	name          = "test-jenkins"
+	nameWithPVC   = "test-jenkins-pvc"
 	namespace     = "default"
 	image         = "jenkins/jenkins:lts"
 	envVar        = "TEST_ENV"
@@ -46,6 +47,7 @@ const (
 	pluginVersion = "1.12.4"
 	annotation    = "cnct.io/annotation"
 	secret        = "test-admin-secret"
+	secretWithPVC = "test-admin-secret-pvc"
 	location      = "http://test-jenkins.cnct.io"
 	email         = "admin@cnct.io"
 	serviceType   = "NodePort"
@@ -66,9 +68,6 @@ var _ = Describe("jenkins instance controller", func() {
 		stop chan struct{}
 		// controller k8s client
 		c client.Client
-		// pre requisites:
-		// admin secret
-		adminSecret *corev1.Secret
 	)
 
 	BeforeEach(func() {
@@ -82,35 +81,10 @@ var _ = Describe("jenkins instance controller", func() {
 		Expect(add(mgr, recFn)).To(Succeed())
 
 		stop = StartTestManager(mgr)
-
-		adminSecret = &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      secret,
-				Namespace: namespace,
-			},
-			Type: corev1.SecretTypeOpaque,
-			Data: map[string][]byte{
-
-				"user": []byte("admin"),
-				"pass": []byte("password"),
-			},
-		}
-
-		err = c.Create(context.TODO(), adminSecret)
-		Expect(err).NotTo(HaveOccurred())
-		Eventually(func() error {
-			return c.Get(context.TODO(), types.NamespacedName{Name: secret, Namespace: namespace}, adminSecret)
-		}, timeout).Should(Succeed())
-
 		test.Setup()
 	})
 
 	AfterEach(func() {
-		Expect(c.Delete(context.TODO(), adminSecret)).NotTo(HaveOccurred())
-		Eventually(func() error {
-			return c.Get(context.TODO(), types.NamespacedName{Name: secret, Namespace: namespace}, adminSecret)
-		}, timeout).ShouldNot(Succeed())
-
 		test.Teardown()
 
 		time.Sleep(3 * time.Second)
@@ -121,10 +95,29 @@ var _ = Describe("jenkins instance controller", func() {
 		var instance *jenkinsv1alpha1.JenkinsInstance
 		var expectedRequest reconcile.Request
 		var standardObjectkey types.NamespacedName
+		var adminSecret *corev1.Secret
 
 		BeforeEach(func() {
 			expectedRequest = reconcile.Request{NamespacedName: types.NamespacedName{Name: name, Namespace: namespace}}
 			standardObjectkey = types.NamespacedName{Name: name, Namespace: namespace}
+
+			adminSecret = &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      secret,
+					Namespace: namespace,
+				},
+				Type: corev1.SecretTypeOpaque,
+				Data: map[string][]byte{
+
+					"user": []byte("admin"),
+					"pass": []byte("password"),
+				},
+			}
+			Expect(c.Create(context.TODO(), adminSecret)).NotTo(HaveOccurred())
+			Eventually(func() error {
+				return c.Get(context.TODO(), types.NamespacedName{Name: secret, Namespace: namespace}, adminSecret)
+			}, timeout).Should(Succeed())
+
 			instance = &jenkinsv1alpha1.JenkinsInstance{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      name,
@@ -181,7 +174,6 @@ var _ = Describe("jenkins instance controller", func() {
 					},
 				},
 			}
-
 			Expect(c.Create(context.TODO(), instance)).To(Succeed())
 			Eventually(requests, timeout).Should(Receive(Equal(expectedRequest)))
 			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, instance) }, timeout).
@@ -237,6 +229,11 @@ var _ = Describe("jenkins instance controller", func() {
 			Eventually(func() error { return c.Delete(context.TODO(), deployment) }, timeout).Should(Succeed())
 			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, deployment) }, timeout).
 				ShouldNot(Succeed())
+
+			Expect(c.Delete(context.TODO(), adminSecret)).NotTo(HaveOccurred())
+			Eventually(func() error {
+				return c.Get(context.TODO(), types.NamespacedName{Name: secret, Namespace: namespace}, adminSecret)
+			}, timeout).ShouldNot(Succeed())
 		})
 
 		It("created", func() {
@@ -357,13 +354,52 @@ var _ = Describe("jenkins instance controller", func() {
 		var pvc *corev1.PersistentVolumeClaim
 		var expectedRequest reconcile.Request
 		var standardObjectkey types.NamespacedName
+		var adminSecret *corev1.Secret
 
 		BeforeEach(func() {
-			expectedRequest = reconcile.Request{NamespacedName: types.NamespacedName{Name: name, Namespace: namespace}}
-			standardObjectkey = types.NamespacedName{Name: name, Namespace: namespace}
+			expectedRequest = reconcile.Request{NamespacedName: types.NamespacedName{Name: nameWithPVC, Namespace: namespace}}
+			standardObjectkey = types.NamespacedName{Name: nameWithPVC, Namespace: namespace}
+
+			adminSecret = &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      secretWithPVC,
+					Namespace: namespace,
+				},
+				Type: corev1.SecretTypeOpaque,
+				Data: map[string][]byte{
+
+					"user": []byte("admin"),
+					"pass": []byte("password"),
+				},
+			}
+			Expect(c.Create(context.TODO(), adminSecret)).NotTo(HaveOccurred())
+			Eventually(func() error {
+				return c.Get(context.TODO(), types.NamespacedName{Name: secretWithPVC, Namespace: namespace}, adminSecret)
+			}, timeout).Should(Succeed())
+
+			pvc = &corev1.PersistentVolumeClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      nameWithPVC,
+					Namespace: namespace,
+				},
+				Spec: corev1.PersistentVolumeClaimSpec{
+					AccessModes: []corev1.PersistentVolumeAccessMode{
+						accessMode,
+					},
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							"storage": resource.MustParse(storageSize),
+						},
+					},
+				},
+			}
+			Expect(c.Create(context.TODO(), pvc)).To(Succeed())
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, pvc) }, timeout).
+				Should(Succeed())
+
 			instance = &jenkinsv1alpha1.JenkinsInstance{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      name,
+					Name:      nameWithPVC,
 					Namespace: namespace,
 				},
 				Spec: jenkinsv1alpha1.JenkinsInstanceSpec{
@@ -381,7 +417,7 @@ var _ = Describe("jenkins instance controller", func() {
 						annotation: annotation,
 					},
 					Executors:   executors,
-					AdminSecret: secret,
+					AdminSecret: secretWithPVC,
 					Location:    location,
 					AdminEmail:  email,
 					Ingress: &jenkinsv1alpha1.IngressSpec{
@@ -391,36 +427,15 @@ var _ = Describe("jenkins instance controller", func() {
 						Path: path,
 					},
 					ServiceAccount: &jenkinsv1alpha1.ServiceAccountSpec{
-						Name: name,
+						Name: nameWithPVC,
 					},
 					NetworkPolicy: true,
 					Config:        groovyConfig,
 					Storage: &jenkinsv1alpha1.StorageSpec{
-						JobsPvc: name,
+						JobsPvc: nameWithPVC,
 					},
 				},
 			}
-			pvc = &corev1.PersistentVolumeClaim{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      name,
-					Namespace: namespace,
-				},
-				Spec: corev1.PersistentVolumeClaimSpec{
-					AccessModes: []corev1.PersistentVolumeAccessMode{
-						accessMode,
-					},
-					Resources: corev1.ResourceRequirements{
-						Requests: corev1.ResourceList{
-							"storage": resource.MustParse(storageSize),
-						},
-					},
-				},
-			}
-
-			Expect(c.Create(context.TODO(), pvc)).To(Succeed())
-			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, pvc) }, timeout).
-				Should(Succeed())
-
 			Expect(c.Create(context.TODO(), instance)).To(Succeed())
 			Eventually(requests, timeout).Should(Receive(Equal(expectedRequest)))
 			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, instance) }, timeout).
@@ -467,12 +482,19 @@ var _ = Describe("jenkins instance controller", func() {
 			Eventually(func() error { return c.Delete(context.TODO(), policy) }, timeout).Should(Succeed())
 			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, policy) }, timeout).
 				ShouldNot(Succeed())
-			Eventually(func() error { return c.Delete(context.TODO(), pvc) }, timeout).Should(Succeed())
-			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, pvc) }, timeout).
-				ShouldNot(Succeed())
 			Eventually(func() error { return c.Delete(context.TODO(), deployment) }, timeout).Should(Succeed())
 			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, deployment) }, timeout).
 				ShouldNot(Succeed())
+
+			Expect(c.Delete(context.TODO(), adminSecret)).NotTo(HaveOccurred())
+			Eventually(func() error {
+				return c.Get(context.TODO(), types.NamespacedName{Name: secretWithPVC, Namespace: namespace}, adminSecret)
+			}, timeout).ShouldNot(Succeed())
+
+			Expect(c.Delete(context.TODO(), pvc)).NotTo(HaveOccurred())
+			Eventually(func() error {
+				return c.Get(context.TODO(), standardObjectkey, adminSecret)
+			}, timeout).ShouldNot(Succeed())
 		})
 
 		It("created", func() {
@@ -564,7 +586,7 @@ var _ = Describe("jenkins instance controller", func() {
 		It("reconciles changes to pre-existing secret with created secret", func() {
 			preExistingSecret := &corev1.Secret{}
 			Eventually(func() error {
-				return c.Get(context.TODO(), types.NamespacedName{Name: secret, Namespace: namespace}, preExistingSecret)
+				return c.Get(context.TODO(), types.NamespacedName{Name: secretWithPVC, Namespace: namespace}, preExistingSecret)
 			}, timeout).Should(Succeed())
 
 			secretCopy := preExistingSecret.DeepCopy()
