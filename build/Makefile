@@ -36,7 +36,7 @@ BUILD_OPERATOR_BINARY_CMD=${GOBUILD} -a -tags netgo -ldflags ${LDFLAGS} -o ${OPE
 all: bin-data test manager-linux-amd64
 linux: bin-data test manager-linux-amd64
 darwin: bin-data test manager-darwin-amd64
-container: bin-data docker-build
+container: docker-build
 
 # generate bindata
 bin-data:
@@ -68,7 +68,7 @@ deploy: manifests
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests:
-	go run vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go all
+	go run $(PROJECTDIR)/vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go all
 	go-bindata -o $(PROJECTDIR)/config/crds/data.go -ignore data\\.go -pkg crds -prefix $(PROJECTDIR)/config/crds $(PROJECTDIR)/config/crds/...
 
 # Run go fmt against code
@@ -87,7 +87,8 @@ generate:
 install-dep:
 	go get -u github.com/golang/dep/cmd/dep
 	go get -u github.com/go-bindata/go-bindata/...
-	go install github.com/onsi/ginkgo/ginkgo
+	go get -u github.com/onsi/ginkgo/ginkgo
+	go get -u github.com/onsi/gomega/...
 
 # New Dep will just blow away Gopkg, vendor and do a dep init
 new-dep:
@@ -99,8 +100,8 @@ dep-ensure:
 	$(DEPCMD) ensure
 
 # Build the docker image
-docker-build: test
-	docker build $(PROJECTDIR) -f $(PROJECTDIR)/build/docker/Dockerfile -t $(DOCKERTAG)
+docker-build:
+	docker build $(PROJECTDIR) -f $(PROJECTDIR)/build/docker/jenkins-operator/Dockerfile -t $(DOCKERTAG)
 	@echo "updating kustomize image patch file for manager resource"
 	sed -i 's@image: .*@image: '"${DOCKERTAG}"'@' $(PROJECTDIR)/config/default/manager_image_patch.yaml
 
