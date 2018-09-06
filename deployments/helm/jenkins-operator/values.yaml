@@ -10,6 +10,9 @@ image:
 
 nameOverride: ""
 fullnameOverride: ""
+# comma separated list of namespaces to which this operator is scoped.
+# empty string for all namespaces
+namespaces: ""
 
 resources: {}
   # If you  want to specify resources, uncomment the following
