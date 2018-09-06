@@ -25,6 +25,7 @@ import (
 	jenkinsv1alpha1 "github.com/maratoid/jenkins-operator/pkg/apis/jenkins/v1alpha1"
 	"github.com/maratoid/jenkins-operator/pkg/bindata"
 	"github.com/maratoid/jenkins-operator/pkg/util"
+	"github.com/spf13/viper"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/api/extensions/v1beta1"
@@ -78,7 +79,6 @@ const (
 
 // Add creates a new JenkinsInstance Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-// USER ACTION REQUIRED: update cmd/manager/main.go to call this jenkins.Add(mgr) to install this Controller
 func Add(mgr manager.Manager) error {
 	return add(mgr, newReconciler(mgr))
 }
@@ -100,8 +100,10 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
+	watchPredicate := util.NewPredicate(viper.GetString("namespace"))
+
 	// Watch for changes to JenkinsInstance
-	err = c.Watch(&source.Kind{Type: &jenkinsv1alpha1.JenkinsInstance{}}, &handler.EnqueueRequestForObject{})
+	err = c.Watch(&source.Kind{Type: &jenkinsv1alpha1.JenkinsInstance{}}, &handler.EnqueueRequestForObject{}, watchPredicate)
 	if err != nil {
 		return err
 	}
@@ -110,7 +112,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	err = c.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &jenkinsv1alpha1.JenkinsInstance{},
-	})
+	}, watchPredicate)
 	if err != nil {
 		return err
 	}
@@ -119,7 +121,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	err = c.Watch(&source.Kind{Type: &corev1.Secret{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &jenkinsv1alpha1.JenkinsInstance{},
-	})
+	}, watchPredicate)
 	if err != nil {
 		return err
 	}
@@ -128,7 +130,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	err = c.Watch(&source.Kind{Type: &corev1.Service{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &jenkinsv1alpha1.JenkinsInstance{},
-	})
+	}, watchPredicate)
 	if err != nil {
 		return err
 	}
@@ -137,7 +139,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	err = c.Watch(&source.Kind{Type: &v1beta1.Ingress{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &jenkinsv1alpha1.JenkinsInstance{},
-	})
+	}, watchPredicate)
 	if err != nil {
 		return err
 	}
@@ -146,7 +148,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	err = c.Watch(&source.Kind{Type: &authv1.ClusterRoleBinding{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &jenkinsv1alpha1.JenkinsInstance{},
-	})
+	}, watchPredicate)
 	if err != nil {
 		return err
 	}
@@ -155,7 +157,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	err = c.Watch(&source.Kind{Type: &corev1.ServiceAccount{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &jenkinsv1alpha1.JenkinsInstance{},
-	})
+	}, watchPredicate)
 	if err != nil {
 		return err
 	}
@@ -164,7 +166,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	err = c.Watch(&source.Kind{Type: &netv1.NetworkPolicy{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &jenkinsv1alpha1.JenkinsInstance{},
-	})
+	}, watchPredicate)
 	if err != nil {
 		return err
 	}
@@ -201,7 +203,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 				// return found keys
 				return keys
 			}),
-		})
+		}, watchPredicate)
 	if err != nil {
 		return err
 	}
@@ -359,7 +361,7 @@ func (bc *ReconcileJenkinsInstance) Reconcile(request reconcile.Request) (reconc
 	return reconcile.Result{}, nil
 }
 
-// update status fields of the jenkins instance object and emit events
+// updateJenkinsInstanceStatus updates status fields of the jenkins instance object and emits events
 func (bc *ReconcileJenkinsInstance) updateJenkinsInstanceStatus(jenkinsInstance client.ObjectKey,
 	service *corev1.Service, adminSecret *corev1.Secret, jenkinsApiContext context.Context) error {
 
