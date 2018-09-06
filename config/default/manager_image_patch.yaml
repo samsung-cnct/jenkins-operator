@@ -8,5 +8,5 @@ spec:
     spec:
       containers:
       # Change the value of image field below to your controller image URL
-      - image: jenkins-operator:local
+      - image: quay.io/samsung_cnct/jenkins-operator:local
         name: manager

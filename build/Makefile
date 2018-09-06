@@ -1,5 +1,5 @@
 GOCMD=go
-DOCKERTAG?=jenkins-operator:local
+DOCKERTAG?=quay.io/samsung_cnct/jenkins-operator:local
 GOBUILD=$(GOCMD) build
 GOGET=$(GOCMD) get
 GOTEST=$(GOCMD) test

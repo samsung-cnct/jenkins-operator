@@ -93,8 +93,8 @@ func GetServiceEndpoint(service *corev1.Service, path string, internalPort int32
 	var endpoint string
 	if AmRunningInCluster() {
 		endpoint = fmt.Sprintf(
-			"http://%s.%s.svc.cluster.local:%d",
-			service.Name, service.Namespace, internalPort)
+			"http://%s.%s.svc.cluster.local:%d/%s",
+			service.Name, service.Namespace, internalPort, path)
 	} else if AmRunningInTest() {
 		endpoint = fmt.Sprint(test.GetURL(), "/", path)
 	} else {
