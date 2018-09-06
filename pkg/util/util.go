@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
+// MergeSecretData merges secret Data maps
 func MergeSecretData(ms ...map[string][]byte) map[string][]byte {
 	res := map[string][]byte{}
 	for _, m := range ms {
@@ -22,6 +23,7 @@ func MergeSecretData(ms ...map[string][]byte) map[string][]byte {
 	return res
 }
 
+// InArray searches for arbitrary object types in an array
 func InArray(val interface{}, array interface{}) (exists bool, index int) {
 	exists = false
 	index = -1
@@ -42,6 +44,7 @@ func InArray(val interface{}, array interface{}) (exists bool, index int) {
 	return
 }
 
+// GetNodePort retrieves node port number of a specified kubernetes service
 func GetNodePort(servicePorts []corev1.ServicePort, portName string) int32 {
 	for _, port := range servicePorts {
 		if port.Name == portName {
@@ -52,6 +55,7 @@ func GetNodePort(servicePorts []corev1.ServicePort, portName string) int32 {
 	return 0
 }
 
+// AddFinalizer adds a finalizer string to an array if not present
 func AddFinalizer(finalizer string, finalizers []string) []string {
 	if exists, _ := InArray(finalizer, finalizers); exists {
 		return finalizers
@@ -60,6 +64,7 @@ func AddFinalizer(finalizer string, finalizers []string) []string {
 	return append(finalizers, finalizer)
 }
 
+// DeleteFinalizer removes a finalizer string from an array if present
 func DeleteFinalizer(finalizer string, finalizers []string) []string {
 	// only delete if at the top of the list
 	if exists, index := InArray(finalizer, finalizers); exists && index == 0 {
@@ -69,6 +74,7 @@ func DeleteFinalizer(finalizer string, finalizers []string) []string {
 	return finalizers
 }
 
+// AmRunningInCluster returns true if this binary is running in kubernetes cluster
 func AmRunningInCluster() bool {
 	_, kubeServiceHostPresent := os.LookupEnv("KUBERNETES_SERVICE_HOST")
 	_, kubeServicePortPresent := os.LookupEnv("KUBERNETES_SERVICE_PORT")
@@ -76,6 +82,7 @@ func AmRunningInCluster() bool {
 	return kubeServiceHostPresent && kubeServicePortPresent
 }
 
+// AmRunningInTest returns true if this binary is running under ginkgo
 func AmRunningInTest() bool {
 	_, runningUnderLocalTest := os.LookupEnv("JENKINS_OPERATOR_TESTRUN")
 	return runningUnderLocalTest

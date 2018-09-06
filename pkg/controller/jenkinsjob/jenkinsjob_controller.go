@@ -23,6 +23,7 @@ import (
 	jenkinsv1alpha1 "github.com/maratoid/jenkins-operator/pkg/apis/jenkins/v1alpha1"
 	"github.com/maratoid/jenkins-operator/pkg/controller/jenkinsinstance"
 	"github.com/maratoid/jenkins-operator/pkg/util"
+	"github.com/spf13/viper"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
@@ -88,8 +89,10 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
+	watchPredicate := util.NewPredicate(viper.GetString("namespace"))
+
 	// Watch for changes to JenkinsJob
-	err = c.Watch(&source.Kind{Type: &jenkinsv1alpha1.JenkinsJob{}}, &handler.EnqueueRequestForObject{})
+	err = c.Watch(&source.Kind{Type: &jenkinsv1alpha1.JenkinsJob{}}, &handler.EnqueueRequestForObject{}, watchPredicate)
 	if err != nil {
 		return err
 	}
@@ -130,7 +133,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 				// return found keys
 				return keys
 			}),
-		})
+		}, watchPredicate)
 	if err != nil {
 		return err
 	}
@@ -224,6 +227,7 @@ func (bc *ReconcileJenkinsJob) Reconcile(request reconcile.Request) (reconcile.R
 	return reconcile.Result{}, nil
 }
 
+// newJob creates a new JenkinsCI job configuration in the JenkinsCI instance pointed to by the JenkinsJob object
 func (bc *ReconcileJenkinsJob) newJob(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, jenkinsJob *jenkinsv1alpha1.JenkinsJob, setupSecret *corev1.Secret) error {
 	jenkinsJobXml := jenkinsJob.Spec.JobXml
 	jenkinsJobDsl := jenkinsJob.Spec.JobDsl
@@ -276,6 +280,7 @@ func (bc *ReconcileJenkinsJob) newJob(jenkinsInstance *jenkinsv1alpha1.JenkinsIn
 	return err
 }
 
+// updateJenkinsJobStatus updates status fields of the JenkinsJob object and emits events
 func (bc *ReconcileJenkinsJob) updateJenkinsJobStatus(jenkinsJob *jenkinsv1alpha1.JenkinsJob) error {
 	// NEVER modify objects from the store. It's a read-only, local cache.
 	// You can use DeepCopy() to make a deep copy of original object and modify this copy
@@ -292,6 +297,7 @@ func (bc *ReconcileJenkinsJob) updateJenkinsJobStatus(jenkinsJob *jenkinsv1alpha
 	return bc.Client.Update(context.TODO(), jenkinsJobCopy)
 }
 
+// deleteFinalizer cleans up JenkinsJob finalizer string if present in the JenkinsJob object
 func (bc *ReconcileJenkinsJob) deleteFinalizer(jenkinsJob *jenkinsv1alpha1.JenkinsJob) (bool, error) {
 	if exists, _ := util.InArray(Finalizer, jenkinsJob.Finalizers); exists {
 		jenkinsJobCopy := jenkinsJob.DeepCopy()
@@ -302,6 +308,7 @@ func (bc *ReconcileJenkinsJob) deleteFinalizer(jenkinsJob *jenkinsv1alpha1.Jenki
 	return false, nil
 }
 
+// addFinalizer adds a finalizer string to JenkinsJob object
 func (bc *ReconcileJenkinsJob) addFinalizer(jenkinsJob *jenkinsv1alpha1.JenkinsJob) (bool, error) {
 	if exists, _ := util.InArray(Finalizer, jenkinsJob.Finalizers); !exists {
 
@@ -317,6 +324,7 @@ func (bc *ReconcileJenkinsJob) addFinalizer(jenkinsJob *jenkinsv1alpha1.JenkinsJ
 	return false, nil
 }
 
+// getJenkinsInstance retrieves the JenkinsInstance pointed to by the JenkinsJob object
 func (bc *ReconcileJenkinsJob) getJenkinsInstance(jenkinsJob *jenkinsv1alpha1.JenkinsJob) (*jenkinsv1alpha1.JenkinsInstance, error) {
 	jenkinsInstanceName := jenkinsJob.Spec.JenkinsInstance
 	if jenkinsInstanceName == "" {
@@ -345,6 +353,7 @@ func (bc *ReconcileJenkinsJob) getJenkinsInstance(jenkinsJob *jenkinsv1alpha1.Je
 	return jenkinsInstance, nil
 }
 
+// getSetupSecret retrieves the setup secret object of the JenkinsInstance pointed to by JenkinsJob object
 func (bc *ReconcileJenkinsJob) getSetupSecret(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) (*corev1.Secret, error) {
 	jenkinsSetupSecret := &corev1.Secret{}
 	err := bc.Client.Get(
@@ -366,6 +375,8 @@ func (bc *ReconcileJenkinsJob) getSetupSecret(jenkinsInstance *jenkinsv1alpha1.J
 	return jenkinsSetupSecret, err
 }
 
+// finalizeJob cleans up the JenkinsCI job configuration in the JenkinsCI server managed by the
+// JenkinsInstance object, pointed to by the JenkinsJob object, when JenkinsJob object is deleted
 func (bc *ReconcileJenkinsJob) finalizeJob(jenkinsJob *jenkinsv1alpha1.JenkinsJob) error {
 	// if there are no finalizers, return
 	if exists, _ := util.InArray(Finalizer, jenkinsJob.Finalizers); !exists {

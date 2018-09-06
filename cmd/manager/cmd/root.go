@@ -57,12 +57,28 @@ func init() {
 
 	rootCmd.Flags().Bool("install-crds", true, "install the CRDs used by the controller as part of startup")
 	viper.BindPFlag("installCrds", rootCmd.Flags().Lookup("install-crds"))
-	rootCmd.Flags().AddGoFlagSet(flag.CommandLine)
+	rootCmd.Flags().String("namespace", "", "scope operator to a these namespaces, comma-separated")
+	viper.BindPFlag("namespace", rootCmd.Flags().Lookup("namespace"))
+	rootCmd.Flags().AddGoFlag(flag.CommandLine.Lookup("alsologtostderr"))
+	viper.BindPFlag("alsologtostderr", rootCmd.Flags().Lookup("alsologtostderr"))
+	rootCmd.Flags().AddGoFlag(flag.CommandLine.Lookup("kubeconfig"))
+	viper.BindPFlag("kubeconfig", rootCmd.Flags().Lookup("kubeconfig"))
+	rootCmd.Flags().AddGoFlag(flag.CommandLine.Lookup("master"))
+	viper.BindPFlag("master", rootCmd.Flags().Lookup("master"))
+	rootCmd.Flags().AddGoFlag(flag.CommandLine.Lookup("v"))
+	viper.BindPFlag("v", rootCmd.Flags().Lookup("v"))
+	rootCmd.Flags().AddGoFlag(flag.CommandLine.Lookup("vmodule"))
+	viper.BindPFlag("vmodule", rootCmd.Flags().Lookup("vmodule"))
+	rootCmd.Flags().AddGoFlag(flag.CommandLine.Lookup("stderrthreshold"))
+	viper.BindPFlag("stderrthreshold", rootCmd.Flags().Lookup("stderrthreshold"))
+	rootCmd.Flags().AddGoFlag(flag.CommandLine.Lookup("log_dir"))
+	viper.BindPFlag("log_dir", rootCmd.Flags().Lookup("log_dir"))
 
 	// get rid of glog noise (https://github.com/kubernetes/kubernetes/issues/17162)
 	flag.CommandLine.Parse([]string{})
 }
 
+// Execute runs the root cobra command
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)

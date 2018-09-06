@@ -48,6 +48,7 @@ var credentialPropertyMap = map[string]credentialProperties{
 	},
 }
 
+// GetJenkinsLocationHost returns jenkins location url
 func GetJenkinsLocationHost(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) string {
 	hostUrl, _ := url.Parse(jenkinsInstance.Spec.Location)
 	return hostUrl.Host
@@ -112,6 +113,7 @@ func GetJenkinsApiToken(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, servic
 	return apiToken, err
 }
 
+// GetCSRFToken returns two components of a crumb protection header
 func GetCSRFToken(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, setupSecret *corev1.Secret) (string, string, error) {
 	apiUrl, err := url.Parse(jenkinsInstance.Status.Api)
 	if err != nil {
