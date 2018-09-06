@@ -1,0 +1,45 @@
+project_name: jenkins-operator
+before:
+  hooks:
+    - make -f build/Makefile bin-data
+    - make -f build/Makefile fmt
+    - make -f build/Makefile vet
+
+builds:
+  - ldflags:
+      - -X github.com/maratoid/jenkins-operator/pkg/version.gitCommit=${GIT_COMMIT}
+      - -X github.com/maratoid/jenkins-operator/pkg/version.gitVersion=${GIT_TAG}
+      - -X github.com/maratoid/jenkins-operator/pkg/version.gitTreeState=${GIT_DIRTY}
+      - -X github.com/maratoid/jenkins-operator/pkg/version.buildDate=${BUILD_DATE}
+      - -w -extldflags "-static"
+    flags:
+      - -a
+      - -tags
+      - netgo
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+    env:
+      - CGO_ENABLED=0
+    main: ./cmd/manager/main.go
+    binary: jenkins-operator
+
+archive:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+  replacements:
+    darwin: Darwin
+    linux: Linux
+    amd64: x86_64
+  files:
+    - none*
+
+checksum:
+  name_template: '{{ .ProjectName }}_checksums.txt'
+
+snapshot:
+  name_template: "SNAPSHOT-{{.Commit}}"
+
+changelog:
+  sort: asc
