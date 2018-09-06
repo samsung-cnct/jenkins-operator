@@ -37,7 +37,7 @@ import (
 
 // TODO: add tlsSecret for ingress testing
 const (
-	timeout       = time.Second * 15
+	timeout       = time.Second * 30
 	name          = "test-jenkins"
 	nameWithPVC   = "test-jenkins-pvc"
 	namespace     = "default"

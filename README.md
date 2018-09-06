@@ -27,6 +27,14 @@ The jenkins operator manages JenkinsCI instances deployed to [Kubernetes][k8s-ho
 $ helm install deployments/helm/jenkins-operator --name jenkins-operator
 ```
 
+or
+
+```bash
+$ helm repo add cnct https://charts.migrations.cnct.io
+$ helm repo update
+$ helm install cnct/jenkins-operator --name jenkins-operator
+```
+
 ### Create a secret with Jenkins admin credentials
 ```bash
 $ kubectl create -f config/samples/jenkinssecret.yaml 
