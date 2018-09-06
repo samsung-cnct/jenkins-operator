@@ -23,7 +23,7 @@ spec:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ["jenkins-operator"]
+          command: ["./jenkins-operator"]
           {{- if eq .Values.namespaces "" }}
           args: ["--alsologtostderr", "--install-crds=true"]
           {{- else }}
