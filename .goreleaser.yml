@@ -45,7 +45,8 @@ changelog:
   sort: asc
 
 release:
-  owner: samsung-cnct
-  name: jenkins-operator
+  github:
+    owner: samsung-cnct
+    name: jenkins-operator
   name_template: "{{.ProjectName}}-v{{.Version}}"
 
