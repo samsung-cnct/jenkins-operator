@@ -40,7 +40,7 @@ container: docker-build
 
 # generate bindata
 bin-data:
-	go-bindata -o $(PROJECTDIR)/pkg/bindata/data.go -ignore data\\.go -pkg bindata -prefix $(PROJECTDIR)/pkg/bindata $(PROJECTDIR)/pkg/bindata/...
+	go-bindata -o $(PROJECTDIR)/pkg/bindata/data.go -ignore data\\.go -nometadata -pkg bindata -prefix $(PROJECTDIR)/pkg/bindata $(PROJECTDIR)/pkg/bindata/...
 
 # Run tests
 test: generate fmt vet manifests
@@ -69,7 +69,7 @@ deploy: manifests
 # Generate manifests e.g. CRD, RBAC etc.
 manifests:
 	go run $(PROJECTDIR)/vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go all
-	go-bindata -o $(PROJECTDIR)/config/crds/data.go -ignore data\\.go -pkg crds -prefix $(PROJECTDIR)/config/crds $(PROJECTDIR)/config/crds/...
+	go-bindata -o $(PROJECTDIR)/config/crds/data.go -ignore data\\.go -nometadata -pkg crds -prefix $(PROJECTDIR)/config/crds $(PROJECTDIR)/config/crds/...
 
 # Run go fmt against code
 fmt:
