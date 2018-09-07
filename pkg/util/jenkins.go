@@ -105,7 +105,9 @@ func GetJenkinsApiToken(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, servic
 	})
 
 	if apiToken == "" {
-		err = fmt.Errorf("element 'apiToken' missing value")
+		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		err = fmt.Errorf("element 'apiToken' missing value. "+
+			"Jenkins endpoint was %s. Reponse: %s", serviceUrl, string(bodyBytes))
 	} else {
 		err = nil
 	}

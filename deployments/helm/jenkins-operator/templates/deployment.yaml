@@ -19,6 +19,9 @@ spec:
         app: {{ include "jenkins-operator.name" . }}
         release: {{ .Release.Name }}
     spec:
+      {{- if .Values.rbac }}
+      serviceAccountName: {{ include "jenkins-operator.name" . }}
+      {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}"

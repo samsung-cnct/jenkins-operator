@@ -14,6 +14,9 @@ fullnameOverride: ""
 # empty string for all namespaces
 namespaces: ""
 
+# use rbac
+rbac: true
+
 resources: {}
   # If you  want to specify resources, uncomment the following
   # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
