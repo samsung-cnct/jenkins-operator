@@ -4,6 +4,7 @@ before:
     - make -f build/Makefile bin-data
     - make -f build/Makefile fmt
     - make -f build/Makefile vet
+    - make -f build/Makefile manifests
 
 builds:
   - ldflags:

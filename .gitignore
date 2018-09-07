@@ -12,4 +12,5 @@
 *.out
 /jenkins-operator
 .idea/
+dist/
 Go_build_*
