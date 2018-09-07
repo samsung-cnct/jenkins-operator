@@ -85,7 +85,7 @@ func Ds_store() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: ".DS_Store", size: 12292, mode: os.FileMode(420), modTime: time.Unix(1534797400, 0)}
+	info := bindataFileInfo{name: ".DS_Store", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -105,7 +105,7 @@ func environmentJenkinsJvmEnvironment() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "environment/jenkins-jvm-environment", size: 216, mode: os.FileMode(420), modTime: time.Unix(1532036458, 0)}
+	info := bindataFileInfo{name: "environment/jenkins-jvm-environment", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -125,7 +125,7 @@ func environmentRequiredPlugins() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "environment/required-plugins", size: 170, mode: os.FileMode(420), modTime: time.Unix(1534541787, 0)}
+	info := bindataFileInfo{name: "environment/required-plugins", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -145,7 +145,7 @@ func initGroovy0JenkinsConfigGroovy() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "init-groovy/0-jenkins-config.groovy", size: 1936, mode: os.FileMode(420), modTime: time.Unix(1532381258, 0)}
+	info := bindataFileInfo{name: "init-groovy/0-jenkins-config.groovy", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -165,7 +165,7 @@ func jobdslSeedJobDsl() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "jobdsl/seed-job-dsl", size: 356, mode: os.FileMode(420), modTime: time.Unix(1532986279, 0)}
+	info := bindataFileInfo{name: "jobdsl/seed-job-dsl", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
