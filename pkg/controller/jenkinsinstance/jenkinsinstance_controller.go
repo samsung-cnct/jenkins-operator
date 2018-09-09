@@ -46,6 +46,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"sort"
 	"strings"
 	"text/template"
 	"time"
@@ -197,6 +198,13 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 							NamespacedName: types.NewNamespacedNameFromString(
 								fmt.Sprintf("%s%c%s", inst.GetNamespace(), types.Separator, inst.GetName())),
 						})
+					} else if inst.Spec.PluginConfig != nil {
+						if inst.Spec.PluginConfig.ConfigSecret == a.Meta.GetName() {
+							keys = append(keys, reconcile.Request{
+								NamespacedName: types.NewNamespacedNameFromString(
+									fmt.Sprintf("%s%c%s", inst.GetNamespace(), types.Separator, inst.GetName())),
+							})
+						}
 					}
 				}
 
@@ -556,10 +564,42 @@ func (bc *ReconcileJenkinsInstance) newSetupSecret(jenkinsInstance *jenkinsv1alp
 	// add things to the string data
 	byteData := map[string][]byte{
 		"0-jenkins-config.groovy": []byte(jenkinsConfigParsed.String()),
-		"1-user-config.groovy":    []byte(jenkinsInstance.Spec.Config),
 		"plugins.txt":             []byte(strings.Join(pluginList, "\n")),
 		"seed-job-dsl":            []byte(string(seedDsl[:])),
 		"user":                    []byte(adminUser),
+	}
+
+	if jenkinsInstance.Spec.PluginConfig != nil {
+		if jenkinsInstance.Spec.PluginConfig.Config != "" {
+			byteData["1-user-config.groovy"] = []byte(jenkinsInstance.Spec.PluginConfig.Config)
+		}
+
+		if jenkinsInstance.Spec.PluginConfig.ConfigSecret != "" {
+			configSecret := &corev1.Secret{}
+			err = bc.Client.Get(
+				context.TODO(), types.NewNamespacedNameFromString(
+					fmt.Sprintf("%s%c%s", jenkinsInstance.GetNamespace(), types.Separator,
+						jenkinsInstance.Spec.PluginConfig.ConfigSecret)),
+				configSecret)
+			if err != nil {
+				glog.Errorf("Failed to load plugin config secret %s: %s",
+					jenkinsInstance.Spec.PluginConfig.ConfigSecret, err)
+				return nil, err
+			}
+
+			// add values from config secret to our setup secret in
+			// lexical order
+			keys := make([]string, 0)
+			for k, _ := range configSecret.Data {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+
+			for _, keyVal := range keys {
+				key := fmt.Sprintf("2-user-config-%s.groovy", keyVal)
+				byteData[key] = configSecret.Data[keyVal]
+			}
+		}
 	}
 
 	if exists {

@@ -9,8 +9,8 @@ spec:
   env:
     SOME_ENV: "test"
   plugins:
-    - id: greenballs
-      version: "1.15"
+    - id:  config-file-provider
+      version: "3.1"
   annotations:
     cnct.io/annotation: "test"
     cnct.io/other-annotation: "other test"
@@ -40,5 +40,31 @@ spec:
         - ReadWriteOnce
       resources:
         requests:
-          storage: 1Gi
+          storage: 1G
+
+  pluginconfig:
+    configsecret: pluginconfigs
+    config: |
+      import hudson.*
+      import hudson.model.*
+      import jenkins.model.*
+      import jenkins.model.Jenkins.*
+      import org.jenkinsci.plugins.configfiles.*
+      import org.jenkinsci.lib.configprovider.model.*
+      import org.jenkinsci.plugins.configfiles.groovy.*
+      import org.jenkinsci.plugins.configfiles.*
+
+      GlobalConfigFiles globalConfigFiles = Jenkins.getInstance().getExtensionList(GlobalConfigFiles.class).get(GlobalConfigFiles.class);
+      ConfigFileStore store = globalConfigFiles.get();
+
+      String defaultJenkinsfile = """import io.cnct.pipeline.*
+      new cnctPipeline().execute()"""
+
+      Config config = new GroovyScript(
+        'Jenkinsfile',
+        'Jenkinsfile',
+        'Default pipeline Jenkinsfile',
+        defaultJenkinsfile,
+        'org.jenkinsci.plugins.configfiles.groovy.GroovyScript');
+      store.save(config);
 

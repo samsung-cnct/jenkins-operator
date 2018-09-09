@@ -93,8 +93,8 @@ spec:
     env:                                            # dictionary of environment variables to be set in the jenkins instance
         SOME_ENV: "test"
     plugins:                                        # dictionary of Jenkins plugins to install
-        - id: greenballs                            # plugin id
-          version: "1.15"                           # plugin version
+        - id:  config-file-provider                 # plugin id
+          version: "3.1"                            # plugin version
     annotations:                                    # Jenkins deployment annotations
         cnct.io/annotation: "test"
         cnct.io/other-annotation: "other test"
@@ -125,41 +125,45 @@ spec:
               storage: 1Gi
     rbac:                                           # RBAC settings
         clusterrole: jenkins                        # name of pre-existing ClusterRole to bind service account to
-    config: |                                       # Groovy configuration script string to run on startup of jenkins 
-        import hudson.*
-        import hudson.model.*
-        import jenkins.model.*
-        import jenkins.model.Jenkins.*
-        import org.jenkinsci.plugins.configfiles.*
-        import org.jenkinsci.lib.configprovider.model.*
-        import org.jenkinsci.plugins.configfiles.groovy.*
-        import org.jenkinsci.plugins.configfiles.*
-        import org.jenkinsci.plugins.scriptsecurity.scripts.*
-        import org.jenkinsci.plugins.scriptsecurity.scripts.languages.*
-        
-        GlobalConfigFiles globalConfigFiles = Jenkins.getInstance().getExtensionList(GlobalConfigFiles.class).get(GlobalConfigFiles.class);
-        ConfigFileStore store = globalConfigFiles.get();
-        
-        
-        
-        String defaultJenkinsfile = """import io.cnct.pipeline.*
-        new cnctPipeline().execute()"""
-        
-        ApprovalContext approvalContext = ApprovalContext.create();
-        String defaultJenkinsfileHash = new ScriptApproval.PendingScript(
-          defaultJenkinsfile, 
-          GroovyLanguage.get(), 
-          approvalContext).getHash();
-        
-        Config config = new GroovyScript(
-          'Jenkinsfile', 
-          'Jenkinsfile', 
-          'Default pipeline Jenkinsfile', 
-          defaultJenkinsfile,
-          'org.jenkinsci.plugins.configfiles.groovy.GroovyScript');
-        store.save(config);
-        
-        ScriptApproval.get().approveScript(defaultJenkinsfileHash) 
+    pluginconfig:                                   # on-startup configuration for plugins
+        configsecret: pluginconfigs                 # Secret with groovy configuration script string to run on startup of jenkins. 
+                                                    # Keys from secret are turned into groovy files
+                                                    # and are run in lexical order on jenkins startup
+        config: |                                   # Groovy configuration script string to run on startup of jenkins. Runs before 'configsecret'
+            import hudson.*
+            import hudson.model.*
+            import jenkins.model.*
+            import jenkins.model.Jenkins.*
+            import org.jenkinsci.plugins.configfiles.*
+            import org.jenkinsci.lib.configprovider.model.*
+            import org.jenkinsci.plugins.configfiles.groovy.*
+            import org.jenkinsci.plugins.configfiles.*
+            import org.jenkinsci.plugins.scriptsecurity.scripts.*
+            import org.jenkinsci.plugins.scriptsecurity.scripts.languages.*
+            
+            GlobalConfigFiles globalConfigFiles = Jenkins.getInstance().getExtensionList(GlobalConfigFiles.class).get(GlobalConfigFiles.class);
+            ConfigFileStore store = globalConfigFiles.get();
+            
+            
+            
+            String defaultJenkinsfile = """import io.cnct.pipeline.*
+            new cnctPipeline().execute()"""
+            
+            ApprovalContext approvalContext = ApprovalContext.create();
+            String defaultJenkinsfileHash = new ScriptApproval.PendingScript(
+              defaultJenkinsfile, 
+              GroovyLanguage.get(), 
+              approvalContext).getHash();
+            
+            Config config = new GroovyScript(
+              'Jenkinsfile', 
+              'Jenkinsfile', 
+              'Default pipeline Jenkinsfile', 
+              defaultJenkinsfile,
+              'org.jenkinsci.plugins.configfiles.groovy.GroovyScript');
+            store.save(config);
+            
+            ScriptApproval.get().approveScript(defaultJenkinsfileHash) 
 ```
 
 ## Create and Destroy Jobs and Credentials

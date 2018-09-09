@@ -47,6 +47,7 @@ const (
 	pluginVersion = "1.12.4"
 	annotation    = "cnct.io/annotation"
 	secret        = "test-admin-secret"
+	pluginsecret  = "test-plugin-secret"
 	secretWithPVC = "test-admin-secret-pvc"
 	location      = "http://test-jenkins.cnct.io"
 	email         = "admin@cnct.io"
@@ -96,6 +97,7 @@ var _ = Describe("jenkins instance controller", func() {
 		var expectedRequest reconcile.Request
 		var standardObjectkey types.NamespacedName
 		var adminSecret *corev1.Secret
+		var pluginSecret *corev1.Secret
 
 		BeforeEach(func() {
 			expectedRequest = reconcile.Request{NamespacedName: types.NamespacedName{Name: name, Namespace: namespace}}
@@ -116,6 +118,23 @@ var _ = Describe("jenkins instance controller", func() {
 			Expect(c.Create(context.TODO(), adminSecret)).NotTo(HaveOccurred())
 			Eventually(func() error {
 				return c.Get(context.TODO(), types.NamespacedName{Name: secret, Namespace: namespace}, adminSecret)
+			}, timeout).Should(Succeed())
+
+			pluginSecret = &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      pluginsecret,
+					Namespace: namespace,
+				},
+				Type: corev1.SecretTypeOpaque,
+				Data: map[string][]byte{
+
+					"one": []byte("dummy"),
+					"two": []byte("dummy"),
+				},
+			}
+			Expect(c.Create(context.TODO(), pluginSecret)).NotTo(HaveOccurred())
+			Eventually(func() error {
+				return c.Get(context.TODO(), types.NamespacedName{Name: pluginsecret, Namespace: namespace}, pluginSecret)
 			}, timeout).Should(Succeed())
 
 			instance = &jenkinsv1alpha1.JenkinsInstance{
@@ -158,7 +177,10 @@ var _ = Describe("jenkins instance controller", func() {
 						Name: name,
 					},
 					NetworkPolicy: true,
-					Config:        groovyConfig,
+					PluginConfig: &jenkinsv1alpha1.PluginConfigSpec{
+						Config:       groovyConfig,
+						ConfigSecret: pluginsecret,
+					},
 					Storage: &jenkinsv1alpha1.StorageSpec{
 						JobsPvc: name,
 						JobsPvcSpec: &corev1.PersistentVolumeClaimSpec{
@@ -233,6 +255,11 @@ var _ = Describe("jenkins instance controller", func() {
 			Expect(c.Delete(context.TODO(), adminSecret)).NotTo(HaveOccurred())
 			Eventually(func() error {
 				return c.Get(context.TODO(), types.NamespacedName{Name: secret, Namespace: namespace}, adminSecret)
+			}, timeout).ShouldNot(Succeed())
+
+			Expect(c.Delete(context.TODO(), pluginSecret)).NotTo(HaveOccurred())
+			Eventually(func() error {
+				return c.Get(context.TODO(), types.NamespacedName{Name: pluginsecret, Namespace: namespace}, pluginSecret)
 			}, timeout).ShouldNot(Succeed())
 		})
 
@@ -355,6 +382,7 @@ var _ = Describe("jenkins instance controller", func() {
 		var expectedRequest reconcile.Request
 		var standardObjectkey types.NamespacedName
 		var adminSecret *corev1.Secret
+		var pluginSecret *corev1.Secret
 
 		BeforeEach(func() {
 			expectedRequest = reconcile.Request{NamespacedName: types.NamespacedName{Name: nameWithPVC, Namespace: namespace}}
@@ -375,6 +403,23 @@ var _ = Describe("jenkins instance controller", func() {
 			Expect(c.Create(context.TODO(), adminSecret)).NotTo(HaveOccurred())
 			Eventually(func() error {
 				return c.Get(context.TODO(), types.NamespacedName{Name: secretWithPVC, Namespace: namespace}, adminSecret)
+			}, timeout).Should(Succeed())
+
+			pluginSecret = &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      pluginsecret,
+					Namespace: namespace,
+				},
+				Type: corev1.SecretTypeOpaque,
+				Data: map[string][]byte{
+
+					"one": []byte("dummy"),
+					"two": []byte("dummy"),
+				},
+			}
+			Expect(c.Create(context.TODO(), pluginSecret)).NotTo(HaveOccurred())
+			Eventually(func() error {
+				return c.Get(context.TODO(), types.NamespacedName{Name: pluginsecret, Namespace: namespace}, pluginSecret)
 			}, timeout).Should(Succeed())
 
 			pvc = &corev1.PersistentVolumeClaim{
@@ -430,7 +475,10 @@ var _ = Describe("jenkins instance controller", func() {
 						Name: nameWithPVC,
 					},
 					NetworkPolicy: true,
-					Config:        groovyConfig,
+					PluginConfig: &jenkinsv1alpha1.PluginConfigSpec{
+						Config:       groovyConfig,
+						ConfigSecret: pluginsecret,
+					},
 					Storage: &jenkinsv1alpha1.StorageSpec{
 						JobsPvc: nameWithPVC,
 					},
@@ -489,6 +537,11 @@ var _ = Describe("jenkins instance controller", func() {
 			Expect(c.Delete(context.TODO(), adminSecret)).NotTo(HaveOccurred())
 			Eventually(func() error {
 				return c.Get(context.TODO(), types.NamespacedName{Name: secretWithPVC, Namespace: namespace}, adminSecret)
+			}, timeout).ShouldNot(Succeed())
+
+			Expect(c.Delete(context.TODO(), pluginSecret)).NotTo(HaveOccurred())
+			Eventually(func() error {
+				return c.Get(context.TODO(), types.NamespacedName{Name: pluginsecret, Namespace: namespace}, pluginSecret)
 			}, timeout).ShouldNot(Succeed())
 
 			Expect(c.Delete(context.TODO(), pvc)).NotTo(HaveOccurred())
