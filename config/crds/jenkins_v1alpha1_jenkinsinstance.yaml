@@ -28,8 +28,6 @@ spec:
               type: string
             annotations:
               type: object
-            config:
-              type: string
             env:
               type: object
             executors:
@@ -53,6 +51,13 @@ spec:
               type: string
             networkpolicy:
               type: boolean
+            pluginconfig:
+              properties:
+                config:
+                  type: string
+                configsecret:
+                  type: string
+              type: object
             plugins:
               items:
                 properties:

@@ -86,6 +86,13 @@ type ServiceAccountSpec struct {
 	AutomountServiceAccountToken *bool `json:"automountServiceAccountToken,omitempty"`
 }
 
+type PluginConfigSpec struct {
+	// config stored as multiline string
+	Config string `json:"config,omitempty"`
+	// config string loaded from a kubernetes secret
+	ConfigSecret string `json:"configsecret,omitempty"`
+}
+
 // JenkinsInstanceSpec defines the desired state of JenkinsInstance
 type JenkinsInstanceSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
@@ -109,7 +116,7 @@ type JenkinsInstanceSpec struct {
 	AdminSecret string `json:"adminsecret,omitempty"`
 
 	// Groovy configuration scripts
-	Config string `json:"config,omitempty"`
+	PluginConfig *PluginConfigSpec `json:"pluginconfig,omitempty"`
 
 	// Jenkins location
 	Location string `json:"location,omitempty"`
