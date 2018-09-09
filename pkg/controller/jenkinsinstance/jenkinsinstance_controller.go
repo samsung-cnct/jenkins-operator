@@ -198,6 +198,13 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 							NamespacedName: types.NewNamespacedNameFromString(
 								fmt.Sprintf("%s%c%s", inst.GetNamespace(), types.Separator, inst.GetName())),
 						})
+					} else if inst.Spec.PluginConfig != nil {
+						if inst.Spec.PluginConfig.ConfigSecret == a.Meta.GetName() {
+							keys = append(keys, reconcile.Request{
+								NamespacedName: types.NewNamespacedNameFromString(
+									fmt.Sprintf("%s%c%s", inst.GetNamespace(), types.Separator, inst.GetName())),
+							})
+						}
 					}
 				}
 
