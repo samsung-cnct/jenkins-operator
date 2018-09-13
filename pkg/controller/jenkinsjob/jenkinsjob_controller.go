@@ -155,8 +155,6 @@ type ReconcileJenkinsJob struct {
 // +kubebuilder:rbac:groups=jenkins.jenkinsoperator.maratoid.github.com,resources=jenkinsjobs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 func (bc *ReconcileJenkinsJob) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	glog.Infof("Start reconcile for %s", request.Name)
-
 	// Fetch the JenkinsJob instance
 	instance := &jenkinsv1alpha1.JenkinsJob{}
 	err := bc.Get(context.TODO(), request.NamespacedName, instance)
@@ -383,17 +381,17 @@ func (bc *ReconcileJenkinsJob) finalizeJob(jenkinsJob *jenkinsv1alpha1.JenkinsJo
 		return nil
 	}
 
-	glog.Infof("Start finalize for %s", jenkinsJob.Name)
-
 	// Get the jenkins instance this plugin is intended for
 	jenkinsInstance, err := bc.getJenkinsInstance(jenkinsJob)
 	if err != nil {
+		_, err = bc.deleteFinalizer(jenkinsJob)
 		return err
 	}
 
 	// Get the secret with the name specified in JenkinsInstance.status
 	setupSecret, err := bc.getSetupSecret(jenkinsInstance)
 	if err != nil {
+		_, err = bc.deleteFinalizer(jenkinsJob)
 		return err
 	}
 
