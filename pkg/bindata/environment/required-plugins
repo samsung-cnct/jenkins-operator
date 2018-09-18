@@ -1,7 +1,0 @@
-credentials:latest
-build-blocker-plugin:latest
-job-dsl:latest
-authorize-project:latest
-workflow-aggregator:latest
-kubernetes:latest
-kubernetes-credentials-provider:latest

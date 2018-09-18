@@ -1,0 +1,5 @@
+resources:
+- ../../../deployments/helm/jenkins-operator/RBAC/rbac_role_binding.yaml
+
+patches:
+- role_binding_patch.yaml

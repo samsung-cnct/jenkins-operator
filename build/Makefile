@@ -33,43 +33,38 @@ OPERATOR_SOURCE_FILE=cmd/manager/main.go
 # build binary command
 BUILD_OPERATOR_BINARY_CMD=${GOBUILD} -a -tags netgo -ldflags ${LDFLAGS} -o ${OPERATOR_BINARY_NAME} ${OPERATOR_SOURCE_FILE}
 
-all: bin-data test manager-linux-amd64
-linux: bin-data test manager-linux-amd64
-darwin: bin-data test manager-darwin-amd64
+all: test manager-linux-amd64
+linux: test manager-linux-amd64
+darwin: test manager-darwin-amd64
 container: docker-build
 
 # generate bindata
 bin-data:
-	go-bindata -o $(PROJECTDIR)/pkg/bindata/data.go -ignore data\\.go -nometadata -pkg bindata -prefix $(PROJECTDIR)/pkg/bindata $(PROJECTDIR)/pkg/bindata/...
+	go-bindata -o $(PROJECTDIR)/pkg/configdata/data.go -ignore data\\.go -ignore \\.DS_Store -mode 511 -nometadata -pkg configdata -prefix $(PROJECTDIR)/pkg/configdata $(PROJECTDIR)/pkg/configdata/...
+	go-bindata -o $(PROJECTDIR)/pkg/crddata/data.go -ignore data\\.go -ignore \\.DS_Store -mode 511 -nometadata -pkg crddata -prefix $(PROJECTDIR)/deployments/helm/jenkins-operator/CRD $(PROJECTDIR)/deployments/helm/jenkins-operator/CRD/...
 
 # Run tests
-test: generate fmt vet manifests
+test: manifests bin-data generate fmt vet
 	export JENKINS_OPERATOR_TESTRUN=true; \
 	ginkgo -r ./pkg/... ./cmd/... -coverprofile cover.out
 
 # Build manager binary
-manager-linux-amd64: generate fmt vet
+manager-linux-amd64: manifests bin-data generate fmt vet
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 ${BUILD_OPERATOR_BINARY_CMD}
-manager-darwin-amd64: generate fmt vet
+manager-darwin-amd64: manifests bin-data generate fmt vet
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 ${BUILD_OPERATOR_BINARY_CMD}
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
-run: generate fmt vet
+run: manifests bin-data generate fmt vet
 	go run ./cmd/manager/main.go
 
-# Install CRDs into a cluster
-install: manifests
-	kubectl apply -f config/crds
-
-# Deploy controller in the configured Kubernetes cluster in ~/.kube/config
-deploy: manifests
-	kubectl apply -f config/crds
-	kustomize build config/default | kubectl apply -f -
-
 # Generate manifests e.g. CRD, RBAC etc.
+# generate parts of helm chart
 manifests:
-	go run $(PROJECTDIR)/vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go all
-	go-bindata -o $(PROJECTDIR)/config/crds/data.go -ignore data\\.go -nometadata -pkg crds -prefix $(PROJECTDIR)/config/crds $(PROJECTDIR)/config/crds/...
+	go run $(PROJECTDIR)/vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go crd --output-dir $(PROJECTDIR)/deployments/helm/jenkins-operator/CRD
+	go run $(PROJECTDIR)/vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go rbac --name "{{ include \"jenkins-operator.name\" . }}" --output-dir $(PROJECTDIR)/deployments/helm/jenkins-operator/RBAC
+	output=$$(kustomize build build/kustomize/rbac); echo "$$output" > $(PROJECTDIR)/deployments/helm/jenkins-operator/RBAC/rbac_role_binding.yaml
+	output=$$(kustomize build build/kustomize/crd); echo "$$output" > $(PROJECTDIR)/deployments/helm/jenkins-operator/CRD-protected/crds.yaml
 
 # Run go fmt against code
 fmt:
@@ -102,8 +97,6 @@ dep-ensure:
 # Build the docker image
 docker-build:
 	docker build $(PROJECTDIR) -f $(PROJECTDIR)/build/docker/jenkins-operator/Dockerfile -t $(DOCKERTAG)
-	@echo "updating kustomize image patch file for manager resource"
-	sed -i 's@image: .*@image: '"${DOCKERTAG}"'@' $(PROJECTDIR)/config/default/manager_image_patch.yaml
 
 # Push the docker image
 docker-push:

@@ -1,0 +1,6 @@
+resources:
+- ../../../deployments/helm/jenkins-operator/CRD/jenkins_v1alpha1_jenkinsinstance.yaml
+- ../../../deployments/helm/jenkins-operator/CRD/jenkins_v1alpha1_jenkinsjob.yaml
+
+patches:
+- crd_helm_patch.yaml

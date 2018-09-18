@@ -33,7 +33,7 @@ import (
 
 // TODO: add tlsSecret for ingress testing
 const (
-	timeout = time.Second * 15
+	timeout = time.Second * 60
 )
 
 var _ = Describe("jenkins job controller", func() {
