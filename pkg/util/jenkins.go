@@ -477,7 +477,7 @@ func JenkinsCredentialExists(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, s
 // JenkinsApiTokenValid checks whether an api token is valid
 func JenkinsApiTokenValid(service *corev1.Service, adminSecret *corev1.Secret, setupSecret *corev1.Secret, masterPort int32) (bool, error) {
 
-	serviceUrl, err := GetServiceEndpoint(service, "me/descriptorByName/jenkins.security.ApiTokenProperty/generateNewToken", masterPort)
+	serviceUrl, err := GetServiceEndpoint(service, "me/api", masterPort)
 	if err != nil {
 		return false, err
 	}
@@ -487,7 +487,6 @@ func JenkinsApiTokenValid(service *corev1.Service, adminSecret *corev1.Secret, s
 		return false, err
 	}
 	apiUrl.User = url.UserPassword(string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
-	apiUrl.Path = "me/api"
 
 	// create request
 	req, err := http.NewRequest(
