@@ -56,7 +56,7 @@ func init() {
 	viper.SetEnvKeyReplacer(replacer)
 	viper.AutomaticEnv()
 
-	rootCmd.Flags().Bool("install-crds", true, "install the CRDs used by the controller as part of startup")
+	rootCmd.Flags().Bool("install-crds", false, "install the CRDs used by the controller as part of startup")
 	viper.BindPFlag("installCrds", rootCmd.Flags().Lookup("install-crds"))
 	rootCmd.Flags().String("namespace", "", "scope operator to a these namespaces, comma-separated")
 	viper.BindPFlag("namespace", rootCmd.Flags().Lookup("namespace"))

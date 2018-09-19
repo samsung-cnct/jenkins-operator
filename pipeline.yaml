@@ -10,5 +10,9 @@ deployments:
     timeout: 600
     retries: 2
     release: jenkins-operator
+    test: 
+      values:
+        - key: keepCRDs
+          value: false
 prod:
   doDeploy: none
