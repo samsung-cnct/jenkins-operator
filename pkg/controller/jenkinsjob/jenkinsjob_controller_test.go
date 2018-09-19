@@ -124,7 +124,6 @@ var _ = Describe("jenkins job controller", func() {
 				},
 				Status: jenkinsv1alpha1.JenkinsInstanceStatus{
 					SetupSecret: "test-job-secret",
-					Api:         test.GetURL(),
 					Phase:       "Ready",
 				},
 			}
@@ -234,7 +233,6 @@ var _ = Describe("jenkins job controller", func() {
 				},
 				Status: jenkinsv1alpha1.JenkinsInstanceStatus{
 					SetupSecret: "test-job-secret",
-					Api:         test.GetURL(),
 					Phase:       "Ready",
 				},
 			}
@@ -330,7 +328,6 @@ var _ = Describe("jenkins job controller", func() {
 				},
 				Status: jenkinsv1alpha1.JenkinsInstanceStatus{
 					SetupSecret: "test-job-secret",
-					Api:         test.GetURL(),
 					Phase:       "Ready",
 				},
 			}
@@ -432,7 +429,6 @@ var _ = Describe("jenkins job controller", func() {
 				},
 				Status: jenkinsv1alpha1.JenkinsInstanceStatus{
 					SetupSecret: "test-job-secret",
-					Api:         test.GetURL(),
 					Phase:       "Ready",
 				},
 			}

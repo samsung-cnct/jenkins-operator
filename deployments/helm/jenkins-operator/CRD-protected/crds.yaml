@@ -75,6 +75,9 @@ spec:
                   type: object
                 name:
                   type: string
+                nodeport:
+                  format: int32
+                  type: integer
                 servicetype:
                   type: string
               type: object
@@ -91,8 +94,6 @@ spec:
         status:
           properties:
             adminsecret:
-              type: string
-            api:
               type: string
             phase:
               type: string

@@ -111,10 +111,12 @@ func operator(cmd *cobra.Command) {
 		_, err = envtest.InstallCRDs(cfg, envtest.CRDInstallOptions{
 			Paths: []string{tempDir},
 		})
-		if errors.IsAlreadyExists(err) {
-			glog.Warning(err)
-		} else {
-			glog.Fatal(err)
+		if err != nil {
+			if errors.IsAlreadyExists(err) {
+				glog.Warning(err)
+			} else {
+				glog.Fatal(err)
+			}
 		}
 	}
 

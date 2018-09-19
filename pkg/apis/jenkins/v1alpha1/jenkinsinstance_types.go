@@ -38,6 +38,9 @@ type ServiceSpec struct {
 	// Jenkins instance service type
 	ServiceType corev1.ServiceType `json:"servicetype,omitempty"`
 
+	// If type is node port, use this node port value
+	NodePort int32 `json:"nodeport,omitempty"`
+
 	// Jenkins service annotations
 	Annotations map[string]string `json:"annotations,omitempty"`
 }
@@ -121,12 +124,7 @@ type JenkinsInstanceSpec struct {
 
 // JenkinsInstanceStatus defines the observed state of JenkinsInstance
 type JenkinsInstanceStatus struct {
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// full url to newly created jenkins remote API endpoint
-	Api string `json:"api,omitempty"`
-
-	// api token
+	// setup secret
 	SetupSecret string `json:"adminsecret,omitempty"`
 
 	// state if jenkins server instance

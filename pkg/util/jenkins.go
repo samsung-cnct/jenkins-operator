@@ -7,7 +7,6 @@ import (
 	"github.com/golang/glog"
 	jenkinsv1alpha1 "github.com/maratoid/jenkins-operator/pkg/apis/jenkins/v1alpha1"
 	"github.com/sethgrid/pester"
-	"io/ioutil"
 	corev1 "k8s.io/api/core/v1"
 	"mime/multipart"
 	"net/http"
@@ -58,26 +57,34 @@ type jenkinsApiToken struct {
 	Data   jenkinsApiTokenData `json:"data"`
 }
 
+type jenkinsCrumbToken struct {
+	Class             string `json:"_class"`
+	Crumb             string `json:"crumb"`
+	CrumbRequestField string `json:"crumbRequestField"`
+}
+
 // GetJenkinsLocationHost returns jenkins location url
 func GetJenkinsLocationHost(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance) string {
 	hostUrl, _ := url.Parse(jenkinsInstance.Spec.Location)
 	return hostUrl.Host
 }
 
-// GetJenkinsApiToken gets an api token for the admin user from a newly created jenkins deployment
-func GetJenkinsApiToken(service *corev1.Service, adminSecret *corev1.Secret, masterPort int32) (string, error) {
-
-	serviceUrl, err := GetServiceEndpoint(service, "me/descriptorByName/jenkins.security.ApiTokenProperty/generateNewToken", masterPort)
+// /me/descriptorByName/jenkins.security.ApiTokenProperty/revoke + tokenUuid
+// RevokeJenkinsApiToken revokes an api token by uuid
+func RevokeJenkinsApiToken(service *corev1.Service, adminSecret *corev1.Secret, setupSecret *corev1.Secret, masterPort int32) error {
+	serviceUrl, err := GetServiceEndpoint(service, "me/descriptorByName/jenkins.security.ApiTokenProperty/revoke", masterPort)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	apiUrl, err := url.Parse(serviceUrl)
 	if err != nil {
-		return "", err
+		return err
 	}
 	apiUrl.User = url.UserPassword(string(adminSecret.Data["user"][:]), string(adminSecret.Data["pass"][:]))
-	apiUrl.RawQuery = fmt.Sprintf("newTokenName=%s", "jenkins-operator-token")
+
+	tokenUuid := string(setupSecret.Data["tokenUuid"][:])
+	apiUrl.RawQuery = fmt.Sprintf("tokenUuid=%s", tokenUuid)
 
 	// create request
 	req, err := http.NewRequest(
@@ -86,21 +93,21 @@ func GetJenkinsApiToken(service *corev1.Service, adminSecret *corev1.Secret, mas
 		nil)
 	if err != nil {
 		glog.Errorf("Error creating POST request to %s", apiUrl)
-		return "", err
+		return err
 	}
 
 	// add headers
 	csrfUrl, err := GetServiceEndpoint(service, "", masterPort)
 	if err != nil {
-		return "", err
+		return err
 	}
-	csrfTokenKey, csrfTokenVal, err := GetCSRFToken(
+	csrfTokenKey, csrfTokenVal, err := getCSRFToken(
 		csrfUrl,
 		string(adminSecret.Data["user"][:]),
 		string(adminSecret.Data["pass"][:]))
 	if err != nil {
 		glog.Errorf("Error getting CSRF token")
-		return "", err
+		return err
 	}
 
 	req.Header.Add(csrfTokenKey, csrfTokenVal)
@@ -114,7 +121,64 @@ func GetJenkinsApiToken(service *corev1.Service, adminSecret *corev1.Secret, mas
 	resp, err := client.Do(req)
 	if err != nil {
 		glog.Errorf("Error performing POST request to %s: %v", apiUrl, err)
-		return "", err
+		return err
+	}
+	defer resp.Body.Close()
+
+	return nil
+}
+
+// GetJenkinsApiToken gets an api token for the admin user from a newly created jenkins deployment
+func GetJenkinsApiToken(service *corev1.Service, adminSecret *corev1.Secret, masterPort int32) (string, string, error) {
+
+	serviceUrl, err := GetServiceEndpoint(service, "me/descriptorByName/jenkins.security.ApiTokenProperty/generateNewToken", masterPort)
+	if err != nil {
+		return "", "", err
+	}
+
+	apiUrl, err := url.Parse(serviceUrl)
+	if err != nil {
+		return "", "", err
+	}
+	apiUrl.User = url.UserPassword(string(adminSecret.Data["user"][:]), string(adminSecret.Data["pass"][:]))
+	apiUrl.RawQuery = fmt.Sprintf("newTokenName=%s", "jenkins-operator-token")
+
+	// create request
+	req, err := http.NewRequest(
+		"POST",
+		apiUrl.String(),
+		nil)
+	if err != nil {
+		glog.Errorf("Error creating POST request to %s", apiUrl)
+		return "", "", err
+	}
+
+	// add headers
+	csrfUrl, err := GetServiceEndpoint(service, "", masterPort)
+	if err != nil {
+		return "", "", err
+	}
+	csrfTokenKey, csrfTokenVal, err := getCSRFToken(
+		csrfUrl,
+		string(adminSecret.Data["user"][:]),
+		string(adminSecret.Data["pass"][:]))
+	if err != nil {
+		glog.Errorf("Error getting CSRF token")
+		return "", "", err
+	}
+
+	req.Header.Add(csrfTokenKey, csrfTokenVal)
+	req.Header.Add("Content-Type", "text/xml; charset=utf-8")
+
+	client := pester.New()
+	client.MaxRetries = 5
+	client.Backoff = pester.ExponentialBackoff
+	client.KeepLog = true
+
+	resp, err := client.Do(req)
+	if err != nil {
+		glog.Errorf("Error performing POST request to %s: %v", apiUrl, err)
+		return "", "", err
 	}
 	defer resp.Body.Close()
 
@@ -123,21 +187,20 @@ func GetJenkinsApiToken(service *corev1.Service, adminSecret *corev1.Secret, mas
 	err = json.NewDecoder(resp.Body).Decode(&apiToken)
 	if err != nil {
 		glog.Errorf("Error decoding POST response: %v", err)
-		return "", err
+		return "", "", err
 	}
 
-	return apiToken.Data.TokenValue, nil
+	return apiToken.Data.TokenValue, apiToken.Data.TokenUuid, nil
 }
 
-// GetCSRFToken returns two components of a crumb protection header
-func GetCSRFToken(jenkinsApiUrl string, userName string, password string) (string, string, error) {
+// getCSRFToken returns two components of a crumb protection header
+func getCSRFToken(jenkinsApiUrl string, userName string, password string) (string, string, error) {
 	apiUrl, err := url.Parse(jenkinsApiUrl)
 	if err != nil {
 		return "", "", err
 	}
 	apiUrl.User = url.UserPassword(userName, password)
-	apiUrl.Path = "crumbIssuer/api/xml"
-	apiUrl.RawQuery = "xpath=concat(//crumbRequestField,\":\",//crumb)"
+	apiUrl.Path = "crumbIssuer/api/json"
 
 	req, err := http.NewRequest("GET", apiUrl.String(), nil)
 	if err != nil {
@@ -157,28 +220,33 @@ func GetCSRFToken(jenkinsApiUrl string, userName string, password string) (strin
 	}
 	defer resp.Body.Close()
 
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	// {"_class":"hudson.security.csrf.DefaultCrumbIssuer","crumb":"CRUMB-TOKEN","crumbRequestField":"CRUMB-FIELD"}
+	crumbToken := jenkinsCrumbToken{}
+	err = json.NewDecoder(resp.Body).Decode(&crumbToken)
 	if err != nil {
+		glog.Errorf("Error decoding GET response: %v", err)
 		return "", "", err
 	}
 
-	csrfToken := strings.Split(string(bodyBytes), ":")
-
-	return csrfToken[0], csrfToken[1], nil
+	return crumbToken.CrumbRequestField, crumbToken.Crumb, nil
 }
 
 // CreateJenkinsJob creates a jenkins job from an xml string
-func CreateJenkinsXMLJob(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, setupSecret *corev1.Secret, jobName string, jobXML string) error {
-	apiUrl, err := url.Parse(jenkinsInstance.Status.Api)
+func CreateJenkinsXMLJob(service *corev1.Service, setupSecret *corev1.Secret, jobName string, jobXML string, masterPort int32) error {
+	serviceUrl, err := GetServiceEndpoint(service, "createItem", masterPort)
+	if err != nil {
+		return err
+	}
+
+	apiUrl, err := url.Parse(serviceUrl)
 	if err != nil {
 		return err
 	}
 	apiUrl.User = url.UserPassword(string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
-	apiUrl.Path = "createItem"
 	apiUrl.RawQuery = fmt.Sprintf("name=%s", jobName)
 
 	// if job already exists, change api url to update
-	exists, err := JenkinsJobExists(jenkinsInstance, setupSecret, jobName)
+	exists, err := JenkinsJobExists(service, setupSecret, jobName, masterPort)
 	if err != nil {
 		glog.Errorf("Error checking whether jenkins job item %s exists", jobName)
 		return err
@@ -200,7 +268,11 @@ func CreateJenkinsXMLJob(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, setup
 	}
 
 	// add headers
-	csrfTokenKey, csrfTokenVal, err := GetCSRFToken(jenkinsInstance.Status.Api, string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
+	serviceUrl, err = GetServiceEndpoint(service, "", masterPort)
+	if err != nil {
+		return err
+	}
+	csrfTokenKey, csrfTokenVal, err := getCSRFToken(serviceUrl, string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
 	if err != nil {
 		glog.Errorf("Error getting CSRF token")
 		return err
@@ -225,13 +297,17 @@ func CreateJenkinsXMLJob(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, setup
 }
 
 // CreateJenkinsJob creates a jenkins job from an jobdsl string
-func CreateJenkinsDSLJob(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, setupSecret *corev1.Secret, jobDSL string) error {
-	apiUrl, err := url.Parse(jenkinsInstance.Status.Api)
+func CreateJenkinsDSLJob(service *corev1.Service, setupSecret *corev1.Secret, jobDSL string, masterPort int32) error {
+	serviceUrl, err := GetServiceEndpoint(service, "job/create-jenkins-jobs/build", masterPort)
+	if err != nil {
+		return err
+	}
+
+	apiUrl, err := url.Parse(serviceUrl)
 	if err != nil {
 		return err
 	}
 	apiUrl.User = url.UserPassword(string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
-	apiUrl.Path = "job/create-jenkins-jobs/build"
 
 	requestBody := new(bytes.Buffer)
 	writer := multipart.NewWriter(requestBody)
@@ -288,7 +364,11 @@ func CreateJenkinsDSLJob(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, setup
 	}
 
 	// add headers
-	csrfTokenKey, csrfTokenVal, err := GetCSRFToken(jenkinsInstance.Status.Api, string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
+	serviceUrl, err = GetServiceEndpoint(service, "", masterPort)
+	if err != nil {
+		return err
+	}
+	csrfTokenKey, csrfTokenVal, err := getCSRFToken(serviceUrl, string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
 	if err != nil {
 		glog.Errorf("Error getting CSRF token")
 		return err
@@ -313,13 +393,17 @@ func CreateJenkinsDSLJob(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, setup
 }
 
 // JenkinsJobExists checks whether a job with a particular name already exists in Jenkins
-func JenkinsJobExists(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, setupSecret *corev1.Secret, jobName string) (bool, error) {
-	apiUrl, err := url.Parse(jenkinsInstance.Status.Api)
+func JenkinsJobExists(service *corev1.Service, setupSecret *corev1.Secret, jobName string, masterPort int32) (bool, error) {
+	serviceUrl, err := GetServiceEndpoint(service, fmt.Sprint("job/", jobName, "/api/json"), masterPort)
+	if err != nil {
+		return false, err
+	}
+
+	apiUrl, err := url.Parse(serviceUrl)
 	if err != nil {
 		return false, err
 	}
 	apiUrl.User = url.UserPassword(string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
-	apiUrl.Path = fmt.Sprint("job/", jobName, "/api/json")
 
 	// create request
 	req, err := http.NewRequest(
@@ -332,7 +416,11 @@ func JenkinsJobExists(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, setupSec
 	}
 
 	// add headers
-	csrfTokenKey, csrfTokenVal, err := GetCSRFToken(jenkinsInstance.Status.Api, string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
+	serviceUrl, err = GetServiceEndpoint(service, "", masterPort)
+	if err != nil {
+		return false, err
+	}
+	csrfTokenKey, csrfTokenVal, err := getCSRFToken(serviceUrl, string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
 	if err != nil {
 		glog.Errorf("Error getting CSRF token")
 		return false, err
@@ -358,13 +446,17 @@ func JenkinsJobExists(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, setupSec
 }
 
 // DeleteJenkinsJob deletes a jenkins job
-func DeleteJenkinsJob(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, setupSecret *corev1.Secret, jobName string) error {
-	apiUrl, err := url.Parse(jenkinsInstance.Status.Api)
+func DeleteJenkinsJob(service *corev1.Service, setupSecret *corev1.Secret, jobName string, masterPort int32) error {
+	serviceUrl, err := GetServiceEndpoint(service, fmt.Sprint("job/", jobName, "/doDelete"), masterPort)
+	if err != nil {
+		return err
+	}
+
+	apiUrl, err := url.Parse(serviceUrl)
 	if err != nil {
 		return err
 	}
 	apiUrl.User = url.UserPassword(string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
-	apiUrl.Path = fmt.Sprint("job/", jobName, "/doDelete")
 
 	// create request
 	req, err := http.NewRequest(
@@ -377,7 +469,11 @@ func DeleteJenkinsJob(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, setupSec
 	}
 
 	// add headers
-	csrfTokenKey, csrfTokenVal, err := GetCSRFToken(jenkinsInstance.Status.Api, string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
+	serviceUrl, err = GetServiceEndpoint(service, "", masterPort)
+	if err != nil {
+		return err
+	}
+	csrfTokenKey, csrfTokenVal, err := getCSRFToken(serviceUrl, string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
 	if err != nil {
 		glog.Errorf("Error getting CSRF token")
 		return err
@@ -429,55 +525,10 @@ func getJenkinsCredentialJson(credentialSecret *corev1.Secret, jobName string, c
 	return string(credentialString)
 }
 
-// JenkinsCredentialExists checks whether a job with a particular name already exists in Jenkins
-func JenkinsCredentialExists(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, setupSecret *corev1.Secret, credentialId string) (bool, error) {
-	apiUrl, err := url.Parse(jenkinsInstance.Status.Api)
-	if err != nil {
-		return false, err
-	}
-	apiUrl.User = url.UserPassword(string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
-	apiUrl.Path = fmt.Sprint("credentials/store/system/domain/_/credential/", credentialId, "/api/json")
-
-	// create request
-	req, err := http.NewRequest(
-		"GET",
-		apiUrl.String(),
-		nil)
-	if err != nil {
-		glog.Errorf("Error creating GET request to %s", apiUrl)
-		return false, err
-	}
-
-	// add headers
-	csrfTokenKey, csrfTokenVal, err := GetCSRFToken(jenkinsInstance.Status.Api, string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
-	if err != nil {
-		glog.Errorf("Error getting CSRF token")
-		return false, err
-	}
-
-	req.Header.Add(csrfTokenKey, csrfTokenVal)
-	req.Header.Add("Accept", `*/*`)
-	req.Header.Add("User-Agent", `jenkins-operator`)
-
-	client := pester.New()
-	client.MaxRetries = 5
-	client.Backoff = pester.ExponentialBackoff
-	client.KeepLog = true
-
-	resp, err := client.Do(req)
-	if err != nil {
-		glog.Errorf("Error performing GET request to %s: %v", apiUrl, err)
-		return false, err
-	}
-	defer resp.Body.Close()
-
-	return resp.StatusCode == 302, nil
-}
-
 // JenkinsApiTokenValid checks whether an api token is valid
 func JenkinsApiTokenValid(service *corev1.Service, adminSecret *corev1.Secret, setupSecret *corev1.Secret, masterPort int32) (bool, error) {
 
-	serviceUrl, err := GetServiceEndpoint(service, "me/api", masterPort)
+	serviceUrl, err := GetServiceEndpoint(service, "me/api/json", masterPort)
 	if err != nil {
 		return false, err
 	}
@@ -503,7 +554,7 @@ func JenkinsApiTokenValid(service *corev1.Service, adminSecret *corev1.Secret, s
 	if err != nil {
 		return false, err
 	}
-	csrfTokenKey, csrfTokenVal, err := GetCSRFToken(csrfUrl, string(adminSecret.Data["user"][:]), string(adminSecret.Data["pass"][:]))
+	csrfTokenKey, csrfTokenVal, err := getCSRFToken(csrfUrl, string(adminSecret.Data["user"][:]), string(adminSecret.Data["pass"][:]))
 	if err != nil {
 		glog.Errorf("Error getting CSRF token")
 		return false, err
@@ -529,19 +580,22 @@ func JenkinsApiTokenValid(service *corev1.Service, adminSecret *corev1.Secret, s
 }
 
 // CreateJenkinsCredential adds a credential to jenkins
-func CreateJenkinsCredential(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, setupSecret *corev1.Secret, credentialSecret *corev1.Secret, jobName string, credentialId string, credentialType string, credentialMap map[string]string) error {
-	err := DeleteJenkinsCredential(jenkinsInstance, setupSecret, credentialId)
+func CreateJenkinsCredential(service *corev1.Service, setupSecret *corev1.Secret, credentialSecret *corev1.Secret, jobName string, credentialId string, credentialType string, credentialMap map[string]string, masterPort int32) error {
+	serviceUrl, err := GetServiceEndpoint(service, "/credentials/store/system/domain/_/createCredentials", masterPort)
 	if err != nil {
 		return err
 	}
 
-	apiUrl, err := url.Parse(jenkinsInstance.Status.Api)
+	err = DeleteJenkinsCredential(service, setupSecret, credentialId, masterPort)
+	if err != nil {
+		return err
+	}
+
+	apiUrl, err := url.Parse(serviceUrl)
 	if err != nil {
 		return err
 	}
 	apiUrl.User = url.UserPassword(string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
-	apiUrl.Path = "/credentials/store/system/domain/_/createCredentials"
-
 	credentialJson := getJenkinsCredentialJson(credentialSecret, jobName, credentialId, credentialType, credentialMap)
 
 	var requestBody = url.Values{}
@@ -558,7 +612,11 @@ func CreateJenkinsCredential(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, s
 	}
 
 	// add headers
-	csrfTokenKey, csrfTokenVal, err := GetCSRFToken(jenkinsInstance.Status.Api, string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
+	serviceUrl, err = GetServiceEndpoint(service, "", masterPort)
+	if err != nil {
+		return err
+	}
+	csrfTokenKey, csrfTokenVal, err := getCSRFToken(serviceUrl, string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
 	if err != nil {
 		glog.Errorf("Error getting CSRF token")
 		return err
@@ -582,13 +640,17 @@ func CreateJenkinsCredential(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, s
 }
 
 // DeleteJenkinsCredential deletes a credential from jenkins
-func DeleteJenkinsCredential(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, setupSecret *corev1.Secret, id string) error {
-	apiUrl, err := url.Parse(jenkinsInstance.Status.Api)
+func DeleteJenkinsCredential(service *corev1.Service, setupSecret *corev1.Secret, id string, masterPort int32) error {
+	serviceUrl, err := GetServiceEndpoint(service, fmt.Sprint("/credentials/store/system/domain/_/credential/", id, "/doDelete"), masterPort)
+	if err != nil {
+		return err
+	}
+
+	apiUrl, err := url.Parse(serviceUrl)
 	if err != nil {
 		return err
 	}
 	apiUrl.User = url.UserPassword(string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
-	apiUrl.Path = fmt.Sprint("/credentials/store/system/domain/_/credential/", id, "/doDelete")
 
 	// create request
 	req, err := http.NewRequest(
@@ -601,7 +663,11 @@ func DeleteJenkinsCredential(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, s
 	}
 
 	// add headers
-	csrfTokenKey, csrfTokenVal, err := GetCSRFToken(jenkinsInstance.Status.Api, string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
+	serviceUrl, err = GetServiceEndpoint(service, "", masterPort)
+	if err != nil {
+		return err
+	}
+	csrfTokenKey, csrfTokenVal, err := getCSRFToken(serviceUrl, string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
 	if err != nil {
 		glog.Errorf("Error getting CSRF token")
 		return err
@@ -624,13 +690,17 @@ func DeleteJenkinsCredential(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, s
 }
 
 // SafeRestartJenkins does a safe jenkins restart
-func SafeRestartJenkins(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, setupSecret *corev1.Secret) error {
-	apiUrl, err := url.Parse(jenkinsInstance.Status.Api)
+func SafeRestartJenkins(service *corev1.Service, setupSecret *corev1.Secret, masterPort int32) error {
+	serviceUrl, err := GetServiceEndpoint(service, "/safeRestart", masterPort)
+	if err != nil {
+		return err
+	}
+
+	apiUrl, err := url.Parse(serviceUrl)
 	if err != nil {
 		return err
 	}
 	apiUrl.User = url.UserPassword(string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
-	apiUrl.Path = "/safeRestart"
 
 	// create request
 	req, err := http.NewRequest(
@@ -643,7 +713,11 @@ func SafeRestartJenkins(jenkinsInstance *jenkinsv1alpha1.JenkinsInstance, setupS
 	}
 
 	// add headers
-	csrfTokenKey, csrfTokenVal, err := GetCSRFToken(jenkinsInstance.Status.Api, string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
+	serviceUrl, err = GetServiceEndpoint(service, "", masterPort)
+	if err != nil {
+		return err
+	}
+	csrfTokenKey, csrfTokenVal, err := getCSRFToken(serviceUrl, string(setupSecret.Data["user"][:]), string(setupSecret.Data["apiToken"][:]))
 	if err != nil {
 		glog.Errorf("Error getting CSRF token")
 		return err

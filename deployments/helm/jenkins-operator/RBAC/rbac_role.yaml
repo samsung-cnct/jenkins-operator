@@ -77,6 +77,12 @@ rules:
   - patch
   - delete
 - apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - list
+- apiGroups:
   - extensions
   resources:
   - ingresses

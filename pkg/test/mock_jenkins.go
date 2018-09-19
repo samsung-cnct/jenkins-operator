@@ -7,13 +7,13 @@ import (
 )
 
 const (
-	mockApiTokenResponse   = `<html><body><input readonly="readonly" id="apiToken" type="text" value="THISISADUMMYJENKINSAPITOKEN" /></body></html>`
-	mockCrumbTokenResponse = "Jenkins-Crumb:THISISADUMMYJENKINSCRUMBTOKEN"
+	mockApiTokenResponse   = `{"status":"ok","data":{"tokenName":"dummytoken","tokenUuid":"4e8ed9dc-c243-430c-8123-be6b17309b7c","tokenValue":"THISISADUMMYJENKINSAPITOKEN"}}`
+	mockCrumbTokenResponse = `{"_class":"hudson.security.csrf.DefaultCrumbIssuer","crumb":"THISISADUMMYJENKINSCRUMBTOKEN","crumbRequestField":"Jenkins-Crumb"}`
 )
 
 const (
-	getApiTokenPath      = "/me/configure"
-	getCrumbTokenPath    = "/crumbIssuer/api/xml"
+	getApiTokenPath      = "/me/descriptorByName/jenkins.security.ApiTokenProperty/generateNewToken"
+	getCrumbTokenPath    = "/crumbIssuer/api/json"
 	createXmlItemPath    = "/createItem"
 	createDslItemPath    = "/job/create-jenkins-jobs/build"
 	jobExistsPath        = "/job/test-job/api/json"

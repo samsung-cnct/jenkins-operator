@@ -105,6 +105,7 @@ spec:
     service:                                        # Kubernetes service options. If not present, default service is created
         name: jenkins                               # service name
         servicetype: NodePort                       # service type
+        nodeport: 30348                             # optional fixed nodeport
         annotations:
           cnct.io/service-annotation: "test"        # service annotations
     ingress:                                        # Kubernetes ingress options. If not present, no Ingress will be created
