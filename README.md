@@ -105,6 +105,7 @@ spec:
     service:                                        # Kubernetes service options. If not present, default service is created
         name: jenkins                               # service name
         servicetype: NodePort                       # service type
+        nodeport: 30348                             # optional fixed nodeport
         annotations:
           cnct.io/service-annotation: "test"        # service annotations
     ingress:                                        # Kubernetes ingress options. If not present, no Ingress will be created
@@ -112,9 +113,8 @@ spec:
           cnct.io/ingress-annotation: "test"
         service: jenkins                            # ingress service. if not specified, the default service name is used
         path: /                                     # ingress path
-    serviceaccount:                                 # Kubernetes service account options. If not specified, no service account is created
-        name: jenkins                               # Service account name
-    networkpolicy: true                             # If true, netwrok policy will be created 
+    serviceaccount: jenkins                         # Kubernetes service account name for jenkins deployment
+    networkpolicy: true                             # If true, network policy will be created 
     storage:                                        # storage options
         jobspvc: jenkins                            # Name of PVC for job storage. If does not exist it will be created. If name is not specified, EmptyDir is used
         jobspvcspec:                                # If PVC is to be created, use this spec
@@ -123,8 +123,6 @@ spec:
           resources:                                # PVC requests
             requests:
               storage: 1Gi
-    rbac:                                           # RBAC settings
-        clusterrole: jenkins                        # name of pre-existing ClusterRole to bind service account to
     pluginconfig:                                   # on-startup configuration for plugins
         configsecret: pluginconfigs                 # Secret with groovy configuration script string to run on startup of jenkins. 
                                                     # Keys from secret are turned into groovy files

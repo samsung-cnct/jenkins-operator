@@ -17,6 +17,7 @@ limitations under the License.
 package cmd
 
 import (
+	"k8s.io/apimachinery/pkg/api/errors"
 	"log"
 
 	"github.com/maratoid/jenkins-operator/pkg/apis"
@@ -30,7 +31,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/golang/glog"
-	"github.com/maratoid/jenkins-operator/config/crds"
+	"github.com/maratoid/jenkins-operator/pkg/crddata"
 	"io/ioutil"
 	"os"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -55,7 +56,7 @@ func init() {
 	viper.SetEnvKeyReplacer(replacer)
 	viper.AutomaticEnv()
 
-	rootCmd.Flags().Bool("install-crds", true, "install the CRDs used by the controller as part of startup")
+	rootCmd.Flags().Bool("install-crds", false, "install the CRDs used by the controller as part of startup")
 	viper.BindPFlag("installCrds", rootCmd.Flags().Lookup("install-crds"))
 	rootCmd.Flags().String("namespace", "", "scope operator to a these namespaces, comma-separated")
 	viper.BindPFlag("namespace", rootCmd.Flags().Lookup("namespace"))
@@ -98,18 +99,25 @@ func operator(cmd *cobra.Command) {
 
 		tempDir, err := ioutil.TempDir("", "jenkins-operator")
 		if err != nil {
-			log.Fatal(err)
+			glog.Fatal(err)
 		}
 		defer os.RemoveAll(tempDir) // clean up
 
-		err = crds.RestoreAssets(tempDir, "")
+		err = crddata.RestoreAssets(tempDir, "")
 		if err != nil {
-			log.Fatal(err)
+			glog.Fatal(err)
 		}
 
 		_, err = envtest.InstallCRDs(cfg, envtest.CRDInstallOptions{
 			Paths: []string{tempDir},
 		})
+		if err != nil {
+			if errors.IsAlreadyExists(err) {
+				glog.Warning(err)
+			} else {
+				glog.Fatal(err)
+			}
+		}
 	}
 
 	glog.Info("Registering Components.")

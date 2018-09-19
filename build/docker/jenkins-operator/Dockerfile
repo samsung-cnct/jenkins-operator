@@ -8,10 +8,15 @@ COPY .  ./
 # Build
 ENV KUBEBUILDER_VERSION=1.0.3
 ENV KUBEBUILDER_ARCH=amd64
+ENV KUSTOMIZE_VERSION=1.0.8
+ENV KUSTOMIZE_ARCH=amd64
 ENV PATH="${PATH}:/usr/local/kubebuilder/bin"
 RUN curl -L -O https://github.com/kubernetes-sigs/kubebuilder/releases/download/v${KUBEBUILDER_VERSION}/kubebuilder_${KUBEBUILDER_VERSION}_linux_${KUBEBUILDER_ARCH}.tar.gz \
     && tar -zxvf kubebuilder_${KUBEBUILDER_VERSION}_linux_${KUBEBUILDER_ARCH}.tar.gz \
-    && mv kubebuilder_${KUBEBUILDER_VERSION}_linux_${KUBEBUILDER_ARCH} /usr/local/kubebuilder
+    && mv kubebuilder_${KUBEBUILDER_VERSION}_linux_${KUBEBUILDER_ARCH} /usr/local/kubebuilder \
+    && curl -L -O https://github.com/kubernetes-sigs/kustomize/releases/download/v${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_${KUSTOMIZE_ARCH} \
+    && mv kustomize_${KUSTOMIZE_VERSION}_linux_${KUSTOMIZE_ARCH} /usr/local/bin/kustomize \
+    && chmod +x /usr/local/bin/kustomize
 RUN make -f build/Makefile install-dep linux
 
 # Copy the controller-manager into a thin image

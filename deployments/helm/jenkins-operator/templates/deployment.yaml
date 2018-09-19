@@ -27,11 +27,7 @@ spec:
           image: "{{ .Values.image.repository }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["./jenkins-operator"]
-          {{- if eq .Values.namespaces "" }}
-          args: ["--alsologtostderr", "--install-crds=true"]
-          {{- else }}
-          args: ["--alsologtostderr", "--install-crds=true", "--namespace={{ .Values.namespaces }}"]
-          {{- end }}
+          args: {{ toJson .Values.args }}
           resources:
 {{ toYaml .Values.resources | indent 12 }}
     {{- with .Values.nodeSelector }}

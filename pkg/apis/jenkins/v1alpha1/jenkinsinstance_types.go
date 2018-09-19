@@ -38,6 +38,9 @@ type ServiceSpec struct {
 	// Jenkins instance service type
 	ServiceType corev1.ServiceType `json:"servicetype,omitempty"`
 
+	// If type is node port, use this node port value
+	NodePort int32 `json:"nodeport,omitempty"`
+
 	// Jenkins service annotations
 	Annotations map[string]string `json:"annotations,omitempty"`
 }
@@ -57,33 +60,12 @@ type IngressSpec struct {
 	Path string `json:"path,omitempty"`
 }
 
-type RbacSpec struct {
-
-	// Name of pre-existing cluster role to bind service account to
-	Clusterrole string `json:"clusterrole,omitempty"`
-}
-
 type StorageSpec struct {
 	// Name of pre-existing (or not) PVC for jobs
 	JobsPvc string `json:"jobspvc,omitempty"`
 
 	// If PVC is to be created, what is its spec
 	JobsPvcSpec *corev1.PersistentVolumeClaimSpec `json:"jobspvcspec,omitempty"`
-}
-
-type ServiceAccountSpec struct {
-	// Jenkins service account name
-	Name string `json:"name,omitempty"`
-
-	// Secrets is the list of secrets allowed to be used by pods running using this ServiceAccount.
-	Secrets []corev1.ObjectReference `json:"secrets,omitempty"`
-
-	// ImagePullSecrets is a list of references to secrets in the same namespace to use for pulling any images
-	// in pods that reference this ServiceAccount.
-	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
-
-	// AutomountServiceAccountToken indicates whether pods running as this service account should have an API token automatically mounted.
-	AutomountServiceAccountToken *bool `json:"automountServiceAccountToken,omitempty"`
 }
 
 type PluginConfigSpec struct {
@@ -130,11 +112,8 @@ type JenkinsInstanceSpec struct {
 	// Jenkins ingress options
 	Ingress *IngressSpec `json:"ingress,omitempty"`
 
-	// Service account spec for jenkins to run under
-	ServiceAccount *ServiceAccountSpec `json:"serviceaccount,omitempty"`
-
-	// Jenkins rbac options
-	Rbac *RbacSpec `json:"rbac,omitempty"`
+	// Service account name for jenkins to run under
+	ServiceAccount string `json:"serviceaccount,omitempty"`
 
 	// Create a network policy
 	NetworkPolicy bool `json:"networkpolicy,omitempty"`
@@ -145,12 +124,7 @@ type JenkinsInstanceSpec struct {
 
 // JenkinsInstanceStatus defines the observed state of JenkinsInstance
 type JenkinsInstanceStatus struct {
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// full url to newly created jenkins remote API endpoint
-	Api string `json:"api,omitempty"`
-
-	// api token
+	// setup secret
 	SetupSecret string `json:"adminsecret,omitempty"`
 
 	// state if jenkins server instance

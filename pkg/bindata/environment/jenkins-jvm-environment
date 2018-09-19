@@ -1,2 +1,0 @@
-JAVA_OPTS:-Xms1024m -Xmx1024m -Djenkins.install.runSetupWizard=false -Djenkins.CLI.disabled=true
-JENKINS_OPTS:--argumentsRealm.passwd.$(ADMIN_USER)=$(ADMIN_PASSWORD) --argumentsRealm.roles.$(ADMIN_USER)=$(ADMIN_USER)

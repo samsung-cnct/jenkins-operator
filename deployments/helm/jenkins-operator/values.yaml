@@ -10,12 +10,20 @@ image:
 
 nameOverride: ""
 fullnameOverride: ""
-# comma separated list of namespaces to which this operator is scoped.
-# empty string for all namespaces
-namespaces: ""
+
+# helm keep policy for CRDs
+keepCRDs: true
 
 # use rbac
 rbac: true
+
+# install CRDs from chart templates
+chartCrds: true
+
+# operator binary arguments
+args:
+  - '--alsologtostderr'
+  - '--install-crds=false'
 
 resources: {}
   # If you  want to specify resources, uncomment the following

@@ -33,7 +33,7 @@ import (
 
 // TODO: add tlsSecret for ingress testing
 const (
-	timeout = time.Second * 15
+	timeout = time.Second * 60
 )
 
 var _ = Describe("jenkins job controller", func() {
@@ -124,7 +124,6 @@ var _ = Describe("jenkins job controller", func() {
 				},
 				Status: jenkinsv1alpha1.JenkinsInstanceStatus{
 					SetupSecret: "test-job-secret",
-					Api:         test.GetURL(),
 					Phase:       "Ready",
 				},
 			}
@@ -234,7 +233,6 @@ var _ = Describe("jenkins job controller", func() {
 				},
 				Status: jenkinsv1alpha1.JenkinsInstanceStatus{
 					SetupSecret: "test-job-secret",
-					Api:         test.GetURL(),
 					Phase:       "Ready",
 				},
 			}
@@ -330,7 +328,6 @@ var _ = Describe("jenkins job controller", func() {
 				},
 				Status: jenkinsv1alpha1.JenkinsInstanceStatus{
 					SetupSecret: "test-job-secret",
-					Api:         test.GetURL(),
 					Phase:       "Ready",
 				},
 			}
@@ -432,7 +429,6 @@ var _ = Describe("jenkins job controller", func() {
 				},
 				Status: jenkinsv1alpha1.JenkinsInstanceStatus{
 					SetupSecret: "test-job-secret",
-					Api:         test.GetURL(),
 					Phase:       "Ready",
 				},
 			}

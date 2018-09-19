@@ -1,18 +1,20 @@
 package util
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/maratoid/jenkins-operator/pkg/test"
 	corev1 "k8s.io/api/core/v1"
-	"net"
-	"net/url"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/kubernetes/scheme"
 	"os"
 	"reflect"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
-// MergeSecretData merges secret Data maps
+// MergeSecretData merges secret Data map
 func MergeSecretData(ms ...map[string][]byte) map[string][]byte {
 	res := map[string][]byte{}
 	for _, m := range ms {
@@ -102,8 +104,31 @@ func GetServiceEndpoint(service *corev1.Service, path string, internalPort int32
 		if err != nil {
 			return "", err
 		}
-		hostUrl, _ := url.Parse(restConfig.Host)
-		host, _, _ := net.SplitHostPort(hostUrl.Host)
+
+		var cli client.Client
+		if cli, err = client.New(restConfig, client.Options{Scheme: scheme.Scheme}); err != nil {
+			return "", err
+		}
+
+		nodeList := &corev1.NodeList{}
+		err = cli.List(
+			context.TODO(),
+			&client.ListOptions{LabelSelector: labels.Everything()},
+			nodeList)
+
+		host := ""
+		for _, inst := range nodeList.Items {
+			for _, address := range inst.Status.Addresses {
+				if address.Type == corev1.NodeExternalIP {
+					host = address.Address
+					break
+				}
+			}
+
+			if host != "" {
+				break
+			}
+		}
 
 		var nodePort int32 = 0
 		for _, port := range service.Spec.Ports {
