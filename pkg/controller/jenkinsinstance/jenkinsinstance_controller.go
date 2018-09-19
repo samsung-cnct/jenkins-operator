@@ -120,7 +120,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	err = c.Watch(&source.Kind{Type: &corev1.PersistentVolumeClaim{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &jenkinsv1alpha1.JenkinsInstance{},
-	}, watchPredicate )
+	}, watchPredicate)
 	if err != nil {
 		return err
 	}
