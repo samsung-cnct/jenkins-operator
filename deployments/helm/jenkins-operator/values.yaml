@@ -5,8 +5,7 @@
 replicaCount: 1
 
 image:
-  repository: quay.io/samsung_cnct/jenkins-operator
-  tag: 0.1.0-5d158905258b5c7534b08cb5bcc7057914342f8b
+  repository: quay.io/samsung_cnct/jenkins-operator:0.1.0
   pullPolicy: IfNotPresent
 
 nameOverride: ""
