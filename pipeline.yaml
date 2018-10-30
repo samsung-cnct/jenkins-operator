@@ -3,7 +3,7 @@ builds:
   - image: samsung_cnct/jenkins-operator
     context: jenkins-operator
     chart: jenkins-operator
-    tagValue: images.tag
+    tagValue: image.tag
     dockerContext: .
 deployments:
   - chart: jenkins-operator
