@@ -5,14 +5,15 @@
 replicaCount: 1
 
 image:
-  repository: quay.io/samsung_cnct/jenkins-operator:prod
-  pullPolicy: Always
+  repository: quay.io/samsung_cnct/jenkins-operator
+  tag: 0.1.0
+  pullPolicy: IfNotPresent
 
 nameOverride: ""
 fullnameOverride: ""
 
 # helm keep policy for CRDs
-keepCRDs: true
+keepCRDs: false
 
 # use rbac
 rbac: true

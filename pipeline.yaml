@@ -3,16 +3,12 @@ builds:
   - image: samsung_cnct/jenkins-operator
     context: jenkins-operator
     chart: jenkins-operator
-    value: image.repository
+    tagValue: image.tag
     dockerContext: .
 deployments:
   - chart: jenkins-operator
     timeout: 600
     retries: 2
     release: jenkins-operator
-    test: 
-      values:
-        - key: keepCRDs
-          value: false
 prod:
   doDeploy: none
