@@ -42,16 +42,17 @@ The following table lists the configurable parameters of the jenkins-operator ch
 | Parameter            | Description                                                      | Default                                      |
 | -------------------- | ---------------------------------------------------------------- | -------------------------------------------- |
 | `replicaCount`       | Number of operator replicas to create                            | `1`                                          |
-| `image.repository`   | Operator container image, including version                      | `quay.io/samsung_cnct/jenkins-operator:prod` |
-| `image.pullPolicy`   | Operator container image pull policy                             | `Always`                                     |
+| `image.repository`   | Operator container image, including version                      | `quay.io/samsung_cnct/jenkins-operator`      |
+| `image.tag`          | Operator container image tag                                     | `0.1.4`                                      |
+| `image.pullPolicy`   | Operator container image pull policy                             | `IfNotPresent`                               |
 | `nameOverride`       | Override the app name                                            |                                              |
 | `fullnameOverride`   | Override the app full name                                       |                                              |
-| `keepCRDs`           | If Helm should skip deleting CRDs when the operator is deleted   | `true`                                       |
+| `keepCRDs`           | If Helm should skip deleting CRDs when the operator is deleted   | `false`                                      |
 | `rbac`               | Install required RBAC service account, roles and rolebindings    | `true`                                       |
 | `chartCrds`          | If the CRDs should be installed from chart templates             | `true`                                       |
 | `args`               | Arguments passed to the operator binary                          | `--alsologtostderr --install-crds=false`     |
 | `resources.cpu`      | CPU limit per jenkins-operator pod                               |                                              |
-| `resources.mempry`   | Memory limit per jenkins-operator pod                            |                                              |
+| `resources.memory`   | Memory limit per jenkins-operator pod                            |                                              |
 | `nodeSelector`       | Node labels for jenkins-operator pod assignment                  | `{}`                                         |
 | `tolerations`        | Tolerations for pod assignment                                   | `[]`                                         |
 | `affinity`           | Affinity settings for pod assignment                             | `{}`                                         |
