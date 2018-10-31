@@ -1,6 +1,6 @@
 1.  jenkins-operator deployed.
 
-    Check the etcd-operator logs:
+    Check the jenkins-operator logs:
         export POD=$(kubectl get pods -l app={{ template "jenkins-operator.name" . }} --namespace {{ .Release.Namespace }} --output name)
         kubectl logs $POD --namespace={{ .Release.Namespace }}
 
