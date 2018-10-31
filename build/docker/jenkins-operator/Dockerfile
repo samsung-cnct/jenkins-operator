@@ -20,7 +20,7 @@ RUN curl -L -O https://github.com/kubernetes-sigs/kubebuilder/releases/download/
 RUN make -f build/Makefile install-dep linux
 
 # Copy the controller-manager into a thin image
-FROM ubuntu:latest
+FROM alpine:3.8
 WORKDIR /root/
 COPY --from=builder /go/src/github.com/maratoid/jenkins-operator/jenkins-operator .
 ENTRYPOINT ["./jenkins-operator", "--alsologtostderr", "--install-crds=true"]
