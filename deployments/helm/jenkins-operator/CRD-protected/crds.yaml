@@ -6,6 +6,11 @@ metadata:
   creationTimestamp: null
   labels:
     controller-tools.k8s.io: "1.0"
+    helm.sh/chart: {{ include "jenkins-operator.chart" . }}
+    app.kubernetes.io/name: {{ include "jenkins-operator.name" . }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Chart.AppVersion }}
   name: jenkinsinstances.jenkins.jenkinsoperator.maratoid.github.com
 spec:
   group: jenkins.jenkinsoperator.maratoid.github.com

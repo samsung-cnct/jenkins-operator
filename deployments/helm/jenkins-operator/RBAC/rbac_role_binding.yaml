@@ -3,6 +3,12 @@ kind: ClusterRoleBinding
 metadata:
   creationTimestamp: null
   name: '{{ include "jenkins-operator.name" . }}-rolebinding'
+  labels:
+    helm.sh/chart: {{ include "jenkins-operator.chart" . }}
+    app.kubernetes.io/name: {{ include "jenkins-operator.name" . }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Chart.AppVersion }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
