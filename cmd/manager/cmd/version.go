@@ -59,10 +59,9 @@ func printVersion() {
 		fmt.Printf("%s\n", jsonOutput)
 	default:
 		fmt.Printf("Version Information:\n")
+		fmt.Printf("\tVersion:\t\t%s\n", info.Version)
 		fmt.Printf("\tGit Data:\n")
-		fmt.Printf("\t\tTagged Version:\t%s\n", info.GitVersion)
 		fmt.Printf("\t\tHash:\t\t%s\n", info.GitCommit)
-		fmt.Printf("\t\tTree State:\t%s\n", info.GitTreeState)
 		fmt.Printf("\tBuild Data:\n")
 		fmt.Printf("\t\tBuild Date:\t%s\n", info.BuildDate)
 		fmt.Printf("\t\tGo Version:\t%s\n", info.GoVersion)
