@@ -43,7 +43,7 @@ The following table lists the configurable parameters of the jenkins-operator ch
 | -------------------- | ---------------------------------------------------------------- | -------------------------------------------- |
 | `replicaCount`       | Number of operator replicas to create                            | `1`                                          |
 | `image.repository`   | Operator container image, including version                      | `quay.io/samsung_cnct/jenkins-operator`      |
-| `image.tag`          | Operator container image tag                                     | `0.1.4`                                      |
+| `image.tag`          | Operator container image tag                                     | `0.1.7`                                      |
 | `image.pullPolicy`   | Operator container image pull policy                             | `IfNotPresent`                               |
 | `nameOverride`       | Override the app name                                            |                                              |
 | `fullnameOverride`   | Override the app full name                                       |                                              |

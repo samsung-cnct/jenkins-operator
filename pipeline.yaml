@@ -9,6 +9,7 @@ deployments:
   - chart: jenkins-operator
     timeout: 600
     retries: 2
+    setAppVersion: true
     release: jenkins-operator
 prod:
   doDeploy: none

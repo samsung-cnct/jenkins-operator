@@ -24,25 +24,23 @@ import (
 )
 
 var (
-	gitVersion   string = ""
-	gitCommit    string = ""
-	gitTreeState string = "dirty"
-	buildDate    string = ""
+	version   string = ""
+	gitCommit string = ""
+	buildDate string = ""
 )
 
 type Info struct {
-	GitVersion   string `json:"gitVersion"`
-	GitCommit    string `json:"gitCommit"`
-	GitTreeState string `json:"gitTreeState"`
-	BuildDate    string `json:"buildDate"`
-	GoVersion    string `json:"goVersion"`
-	Compiler     string `json:"compiler"`
-	Platform     string `json:"platform"`
+	Version   string `json:"version"`
+	GitCommit string `json:"gitCommit"`
+	BuildDate string `json:"buildDate"`
+	GoVersion string `json:"goVersion"`
+	Compiler  string `json:"compiler"`
+	Platform  string `json:"platform"`
 }
 
 // String returns info as a human-friendly version string.
 func (info Info) String() string {
-	return info.GitVersion
+	return info.Version
 }
 
 // Get returns the overall codebase version. It's for detecting
@@ -56,21 +54,20 @@ func Get() Info {
 		gitCommitTemp, _ := cmd.CombinedOutput()
 		gitCommit = strings.TrimSpace(string(gitCommitTemp))
 	}
-	if gitVersion == "" {
-		cmd = exec.Command("bash", "-c", "git describe --tags --abbrev=0 --exact-match 2>/dev/null")
-		gitVersionTemp, _ := cmd.CombinedOutput()
-		gitVersion = strings.TrimSpace(string(gitVersionTemp))
+	if version == "" {
+		cmd = exec.Command("bash", "-c", "cat .versionfile")
+		versionTemp, _ := cmd.CombinedOutput()
+		version = strings.TrimSpace(string(versionTemp))
 	}
 
 	// These variables typically come from -ldflags settings and in
 	// their absence fallback to the settings in pkg/version/base.go
 	return Info{
-		GitVersion:   gitVersion,
-		GitCommit:    gitCommit,
-		GitTreeState: gitTreeState,
-		BuildDate:    buildDate,
-		GoVersion:    runtime.Version(),
-		Compiler:     runtime.Compiler,
-		Platform:     fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
+		Version:   version,
+		GitCommit: gitCommit,
+		BuildDate: buildDate,
+		GoVersion: runtime.Version(),
+		Compiler:  runtime.Compiler,
+		Platform:  fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
 	}
 }

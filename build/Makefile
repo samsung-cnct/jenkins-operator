@@ -3,28 +3,26 @@ DOCKERTAG?=quay.io/samsung_cnct/jenkins-operator:local
 GOBUILD=$(GOCMD) build
 GOGET=$(GOCMD) get
 GOTEST=$(GOCMD) test
-PROJECTDIR = $(shell pwd)
+PROJECTDIR=$(shell pwd)
 DEPCMD=dep
 
 # Variables for binary version information
 GIT_COMMIT=$(shell git rev-parse HEAD)
-GIT_TAG=$(shell git describe --tags --abbrev=0 --exact-match 2>/dev/null)
-GIT_DIRTY=$(shell test -n "`git status --porcelain`" && echo "dirty" || echo "clean")
+APP_VERSION=$(shell cat .versionfile)
 BUILD_DATE=$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 
 # Associating version information variables with data
 VERSION_PACKAGE=github.com/maratoid/jenkins-operator/pkg/version
 LD_DATA_GIT_COMMIT=-X ${VERSION_PACKAGE}.gitCommit=${GIT_COMMIT}
-LD_DATA_GIT_TAG=-X ${VERSION_PACKAGE}.gitVersion=${GIT_TAG}
-LD_DATA_GIT_DIRTY=-X ${VERSION_PACKAGE}.gitTreeState=${GIT_DIRTY}
+LD_DATA_VERSION=-X ${VERSION_PACKAGE}.version=${APP_VERSION}
 LD_DATA_BUILD_DATE=-X ${VERSION_PACKAGE}.buildDate=${BUILD_DATE}
-LD_DATA=${LD_DATA_GIT_COMMIT} ${LD_DATA_GIT_TAG} ${LD_DATA_GIT_DIRTY} ${LD_DATA_BUILD_DATE}
+LD_DATA=${LD_DATA_GIT_COMMIT} ${LD_DATA_VERSION} ${LD_DATA_BUILD_DATE}
 
 # Creating static binary
 STATIC_FLAGS=-w -extldflags "-static"
 
 # Generating ldflag string
-LDFLAGS = '${STATIC_FLAGS} ${LD_DATA}'
+LDFLAGS='${STATIC_FLAGS} ${LD_DATA}'
 
 # Location of
 OPERATOR_BINARY_NAME=jenkins-operator
