@@ -10,13 +10,13 @@ nameOverride: ''
 # long resource name override
 fullnameOverride: ''
 
-# Keep CRDs installed after a release deletion.
+# keep CRDs installed after a release deletion
 keepCRDs: false
 
-# Install RBAC resources
+# install RBAC resources
 rbac: true
 
-# Install CRDs from chart resources (rather than from embedded binary ones)
+# install CRDs from chart resources (rather than from embedded binary ones)
 chartCrds: true
 
 # command line arguments to be passed to the operator binary
