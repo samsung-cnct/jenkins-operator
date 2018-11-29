@@ -39,7 +39,7 @@ container: docker-build
 # generate bindata
 bin-data:
 	go-bindata -o $(PROJECTDIR)/pkg/configdata/data.go -ignore data\\.go -ignore \\.DS_Store -mode 511 -nometadata -pkg configdata -prefix $(PROJECTDIR)/pkg/configdata $(PROJECTDIR)/pkg/configdata/...
-	go-bindata -o $(PROJECTDIR)/pkg/crddata/data.go -ignore data\\.go -ignore \\.DS_Store -mode 511 -nometadata -pkg crddata -prefix $(PROJECTDIR)/deployments/helm/jenkins-operator/CRD $(PROJECTDIR)/deployments/helm/jenkins-operator/CRD/...
+	go-bindata -o $(PROJECTDIR)/pkg/crddata/data.go -ignore data\\.go -ignore \\.DS_Store -mode 511 -nometadata -pkg crddata -prefix $(PROJECTDIR)/crd $(PROJECTDIR)/crd/...
 
 # Run tests
 test: manifests bin-data generate fmt vet
@@ -59,10 +59,16 @@ run: manifests bin-data generate fmt vet
 # Generate manifests e.g. CRD, RBAC etc.
 # generate parts of helm chart
 manifests:
-	go run $(PROJECTDIR)/vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go crd --output-dir $(PROJECTDIR)/deployments/helm/jenkins-operator/CRD
-	go run $(PROJECTDIR)/vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go rbac --name "{{ include \"jenkins-operator.name\" . }}" --output-dir $(PROJECTDIR)/deployments/helm/jenkins-operator/RBAC
-	output=$$(kustomize build build/kustomize/rbac); echo "$$output" > $(PROJECTDIR)/deployments/helm/jenkins-operator/RBAC/rbac_role_binding.yaml
-	output=$$(kustomize build build/kustomize/crd); echo "$$output" > $(PROJECTDIR)/deployments/helm/jenkins-operator/CRD-protected/crds.yaml
+	go run $(PROJECTDIR)/vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go crd --output-dir $(PROJECTDIR)/crd
+	go run $(PROJECTDIR)/vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go rbac --name rbac --output-dir $(PROJECTDIR)/rbac
+	output=$$(kustomize build build/kustomize/rbac/role); echo "$$output" > $(PROJECTDIR)/deployments/helm/jenkins-operator/RBAC/rbac_role.yaml
+	output=$$(kustomize build build/kustomize/rbac/rolebinding); echo "$$output" > $(PROJECTDIR)/deployments/helm/jenkins-operator/RBAC/rbac_role_binding.yaml
+	output=$$(kustomize build build/kustomize/crd/protected/instances); echo "$$output" > $(PROJECTDIR)/deployments/helm/jenkins-operator/CRD-protected/jenkins_v1alpha1_jenkinsinstance.yaml
+	output=$$(kustomize build build/kustomize/crd/protected/jobs); echo "$$output" > $(PROJECTDIR)/deployments/helm/jenkins-operator/CRD-protected/jenkins_v1alpha1_jenkinsjob.yaml
+	output=$$(kustomize build build/kustomize/crd/unprotected/instances); echo "$$output" > $(PROJECTDIR)/deployments/helm/jenkins-operator/CRD/jenkins_v1alpha1_jenkinsinstance.yaml
+    output=$$(kustomize build build/kustomize/crd/unprotected/jobs); echo "$$output" > $(PROJECTDIR)/deployments/helm/jenkins-operator/CRD/jenkins_v1alpha1_jenkinsjob.yaml
+
+# label hack for helm templates
 
 # Run go fmt against code
 fmt:

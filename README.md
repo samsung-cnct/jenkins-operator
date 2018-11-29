@@ -1,4 +1,4 @@
-# JenkinsCI operator
+# Jenkins operator
 [![Build Status](https://jenkins.migrations.cnct.io/buildStatus/icon?job=jenkins-operator/master)](https://jenkins.migrations.cnct.io/job/jenkins-operator/job/master/)
 
 ## Project status: alpha
@@ -9,7 +9,7 @@ We expect to consider the jenkins operator stable soon; backwards incompatible c
 
 ## Overview
 
-The jenkins operator manages JenkinsCI instances deployed to [Kubernetes][k8s-home] and automates tasks related to operating a JenkinsCI server
+The jenkins operator manages Jenkins instances deployed to [Kubernetes][k8s-home] and automates tasks related to operating a Jenkins server
 
 - [Create and Destroy instances](#create-and-destroy-instances)
 - [Create and Destroy Jobs and Credentials](#create-and-destroy-jobs-and-credentials)

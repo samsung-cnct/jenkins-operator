@@ -1,0 +1,7 @@
+namePrefix: '{{ include "jenkins-operator.name" . }}-'
+
+resources:
+- ../../../../rbac/rbac_role.yaml
+
+patches:
+- role_patch.yaml
