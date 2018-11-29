@@ -1,0 +1,5 @@
+resources:
+  - ../../../../../crd/jenkins_v1alpha1_jenkinsinstance.yaml
+
+patches:
+  - crd_helm_patch.yaml

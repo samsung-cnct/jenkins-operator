@@ -42,7 +42,7 @@ var _ = BeforeSuite(func() {
 	var err error
 
 	t = &envtest.Environment{
-		CRDDirectoryPaths: []string{filepath.Join("..", "..", "..", "deployments", "helm", "jenkins-operator", "CRD")},
+		CRDDirectoryPaths: []string{filepath.Join("..", "..", "..", "crd")},
 	}
 
 	apis.AddToScheme(scheme.Scheme)

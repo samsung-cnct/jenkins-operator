@@ -264,7 +264,7 @@ func (bc *ReconcileJenkinsJob) Reconcile(request reconcile.Request) (reconcile.R
 	return reconcile.Result{}, nil
 }
 
-// newJob creates a new JenkinsCI job configuration in the JenkinsCI instance pointed to by the JenkinsJob object
+// newJob creates a new Jenkins job configuration in the Jenkins instance pointed to by the JenkinsJob object
 func (bc *ReconcileJenkinsJob) newJob(instanceName types.NamespacedName) error {
 	jenkinsJob, err := bc.getJenkinsJob(instanceName)
 	if err != nil {
@@ -419,7 +419,7 @@ func (bc *ReconcileJenkinsJob) checkJenkinsInstance(instanceName types.Namespace
 	return jenkinsInstance, nil
 }
 
-// finalizeJob cleans up the JenkinsCI job configuration in the JenkinsCI server managed by the
+// finalizeJob cleans up the Jenkins job configuration in the Jenkins server managed by the
 // JenkinsInstance object, pointed to by the JenkinsJob object, when JenkinsJob object is deleted
 func (bc *ReconcileJenkinsJob) finalizeJob(instanceName types.NamespacedName) error {
 	jenkinsJob, err := bc.getJenkinsJob(instanceName)
