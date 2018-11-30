@@ -66,7 +66,7 @@ manifests:
 	output=$$(kustomize build build/kustomize/crd/protected/instances); echo "$$output" > $(PROJECTDIR)/deployments/helm/jenkins-operator/CRD-protected/jenkins_v1alpha1_jenkinsinstance.yaml
 	output=$$(kustomize build build/kustomize/crd/protected/jobs); echo "$$output" > $(PROJECTDIR)/deployments/helm/jenkins-operator/CRD-protected/jenkins_v1alpha1_jenkinsjob.yaml
 	output=$$(kustomize build build/kustomize/crd/unprotected/instances); echo "$$output" > $(PROJECTDIR)/deployments/helm/jenkins-operator/CRD/jenkins_v1alpha1_jenkinsinstance.yaml
-    output=$$(kustomize build build/kustomize/crd/unprotected/jobs); echo "$$output" > $(PROJECTDIR)/deployments/helm/jenkins-operator/CRD/jenkins_v1alpha1_jenkinsjob.yaml
+	output=$$(kustomize build build/kustomize/crd/unprotected/jobs); echo "$$output" > $(PROJECTDIR)/deployments/helm/jenkins-operator/CRD/jenkins_v1alpha1_jenkinsjob.yaml
 
 # label hack for helm templates
 
