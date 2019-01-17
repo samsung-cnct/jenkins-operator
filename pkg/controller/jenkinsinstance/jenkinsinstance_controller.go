@@ -503,7 +503,7 @@ func (bc *ReconcileJenkinsInstance) newSetupSecret(instanceName types.Namespaced
 		"component":  string(jenkinsInstance.UID),
 	}
 
-	adminUserConfig, err := configdata.Asset("init-groovy/0-jenkins-config.groovy")
+	adminUserConfig, err := configdata.Asset("casc/jenkins.yaml")
 	if err != nil {
 		return nil, err
 	}
@@ -571,17 +571,10 @@ func (bc *ReconcileJenkinsInstance) newSetupSecret(instanceName types.Namespaced
 		return nil, err
 	}
 
-	// load seed job dsl from bindata
-	seedDsl, err := configdata.Asset("jobdsl/seed-job-dsl")
-	if err != nil {
-		return nil, err
-	}
-
 	// add things to the string data
 	byteData := map[string][]byte{
-		"0-jenkins-config.groovy": []byte(jenkinsConfigParsed.String()),
+		"jenkins.yaml": []byte(jenkinsConfigParsed.String()),
 		"plugins.txt":             []byte(strings.Join(pluginList, "\n")),
-		"seed-job-dsl":            []byte(string(seedDsl[:])),
 		"user":                    []byte(adminUser),
 	}
 

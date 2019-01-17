@@ -4,4 +4,5 @@ job-dsl:latest
 authorize-project:latest
 workflow-aggregator:latest
 kubernetes:latest
-kubernetes-credentials-provider:latest
+configuration-as-code:latest
+configuration-as-code-support:latest
