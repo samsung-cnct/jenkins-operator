@@ -3,6 +3,5 @@ build-blocker-plugin:latest
 job-dsl:latest
 authorize-project:latest
 workflow-aggregator:latest
-kubernetes:latest
 configuration-as-code:latest
 configuration-as-code-support:latest

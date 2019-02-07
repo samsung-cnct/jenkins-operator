@@ -21,14 +21,23 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 type PluginSpec struct {
 	// plugin Id
 	Id string `json:"id,omitempty"`
-	// plugin version string
+	// plugin version string (or download url)
 	Version string `json:"version,omitempty"`
+	// config stored as multiline string of jenkins-configuration-as-code
+	Config string `json:"config,omitempty"`
+}
+
+type CredentialSpec struct {
+	// config stored as multiline string of jenkins-configuration-as-code
+	Config string `json:"config"`
+}
+
+type CascSecretSpec struct {
+	// name of a kubernetes secret to be mounted into /secrets/jenkins
+	Secret string `json:"secret"`
 }
 
 type ServiceSpec struct {
@@ -68,13 +77,6 @@ type StorageSpec struct {
 	JobsPvcSpec *corev1.PersistentVolumeClaimSpec `json:"jobspvcspec,omitempty"`
 }
 
-type PluginConfigSpec struct {
-	// config stored as multiline string
-	Config string `json:"config,omitempty"`
-	// config string loaded from a kubernetes secret
-	ConfigSecret string `json:"configsecret,omitempty"`
-}
-
 // JenkinsInstanceSpec defines the desired state of JenkinsInstance
 type JenkinsInstanceSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
@@ -89,6 +91,12 @@ type JenkinsInstanceSpec struct {
 	// Array of plugin configurations
 	Plugins []PluginSpec `json:"plugins,omitempty"`
 
+	// Array of credential configurations
+	Credentials []CredentialSpec `json:"credentials,omitempty"`
+
+	// Array of configuration-as-code secret names
+	CascSecrets []CascSecretSpec `json:"cascsecrets,omitempty"`
+
 	// Jenkins deployment annotations
 	Annotations map[string]string `json:"annotations,omitempty"`
 
@@ -96,9 +104,6 @@ type JenkinsInstanceSpec struct {
 	Executors int32 `json:"executors,omitempty"`
 
 	AdminSecret string `json:"adminsecret,omitempty"`
-
-	// Groovy configuration scripts
-	PluginConfig *PluginConfigSpec `json:"pluginconfig,omitempty"`
 
 	// Jenkins location
 	Location string `json:"location,omitempty"`

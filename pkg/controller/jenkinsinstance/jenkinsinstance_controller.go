@@ -45,7 +45,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"sort"
 	"strings"
 	"text/template"
 )
@@ -187,13 +186,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 							NamespacedName: types.NewNamespacedNameFromString(
 								fmt.Sprintf("%s%c%s", inst.GetNamespace(), types.Separator, inst.GetName())),
 						})
-					} else if inst.Spec.PluginConfig != nil {
-						if inst.Spec.PluginConfig.ConfigSecret == a.Meta.GetName() {
-							keys = append(keys, reconcile.Request{
-								NamespacedName: types.NewNamespacedNameFromString(
-									fmt.Sprintf("%s%c%s", inst.GetNamespace(), types.Separator, inst.GetName())),
-							})
-						}
 					}
 				}
 
@@ -509,6 +501,7 @@ func (bc *ReconcileJenkinsInstance) newSetupSecret(instanceName types.Namespaced
 	}
 
 	type JenkinsInfo struct {
+		Plugins    map[string]string
 		User       string
 		Password   string
 		Url        string
@@ -530,6 +523,7 @@ func (bc *ReconcileJenkinsInstance) newSetupSecret(instanceName types.Namespaced
 	}
 
 	jenkinsInfo := JenkinsInfo{
+		Plugins:    make(map[string]string),
 		User:       string(adminUser[:]),
 		Password:   string(adminPassword[:]),
 		Url:        jenkinsInstance.Spec.Location,
@@ -544,21 +538,22 @@ func (bc *ReconcileJenkinsInstance) newSetupSecret(instanceName types.Namespaced
 		return nil, err
 	}
 	plugins := jenkinsInstance.Spec.Plugins
-	var pluginList []string
 
 	// add required plugins first
 	scanner := bufio.NewScanner(strings.NewReader(string(requiredPlugin[:])))
 	for scanner.Scan() {
-		pluginList = append(pluginList, scanner.Text())
+		parts := strings.Split(scanner.Text(), ":")
+		if len(parts) < 2 {
+			return nil, fmt.Errorf("invalid format of default plugins: %s", scanner.Text())
+		}
+
+		jenkinsInfo.Plugins[parts[0]] = parts[1]
 	}
 
 	// add user plugins next
 	for _, plugin := range plugins {
-		pluginInfo := fmt.Sprintf("%s:%s", plugin.Id, plugin.Version)
-		pluginList = append(pluginList, pluginInfo)
+		jenkinsInfo.Plugins[plugin.Id] = plugin.Version
 	}
-
-	// TODO: remove duplicate plugin ids
 
 	// parse the groovy config template
 	configTemplate, err := template.New("jenkins-config").Parse(string(adminUserConfig[:]))
@@ -574,41 +569,12 @@ func (bc *ReconcileJenkinsInstance) newSetupSecret(instanceName types.Namespaced
 	// add things to the string data
 	byteData := map[string][]byte{
 		"jenkins.yaml": []byte(jenkinsConfigParsed.String()),
-		"plugins.txt":             []byte(strings.Join(pluginList, "\n")),
-		"user":                    []byte(adminUser),
+		"user":         []byte(adminUser),
 	}
 
-	if jenkinsInstance.Spec.PluginConfig != nil {
-		if jenkinsInstance.Spec.PluginConfig.Config != "" {
-			byteData["1-user-config.groovy"] = []byte(jenkinsInstance.Spec.PluginConfig.Config)
-		}
-
-		if jenkinsInstance.Spec.PluginConfig.ConfigSecret != "" {
-			configSecret := &corev1.Secret{}
-			err = bc.Client.Get(
-				context.TODO(), types.NewNamespacedNameFromString(
-					fmt.Sprintf("%s%c%s", jenkinsInstance.GetNamespace(), types.Separator,
-						jenkinsInstance.Spec.PluginConfig.ConfigSecret)),
-				configSecret)
-			if err != nil {
-				glog.Errorf("Failed to load plugin config secret %s: %s",
-					jenkinsInstance.Spec.PluginConfig.ConfigSecret, err)
-				return nil, err
-			}
-
-			// add values from config secret to our setup secret in
-			// lexical order
-			keys := make([]string, 0)
-			for k, _ := range configSecret.Data {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-
-			for _, keyVal := range keys {
-				key := fmt.Sprintf("2-user-config-%s.groovy", keyVal)
-				byteData[key] = configSecret.Data[keyVal]
-			}
-		}
+	// add plugin configurations
+	for _, plugin := range plugins {
+		byteData["plugin-"+plugin.Id+".yaml"] = []byte(plugin.Config)
 	}
 
 	if exists {
@@ -1136,6 +1102,16 @@ func (bc *ReconcileJenkinsInstance) newDeployment(instanceName types.NamespacedN
 		})
 	}
 
+	// CASC variables
+	env = append(env, corev1.EnvVar{
+		Name:  "CASC_JENKINS_CONFIG",
+		Value: "/var/jenkins_home/casc_configs",
+	})
+	env = append(env, corev1.EnvVar{
+		Name:  "SECRETS",
+		Value: "/var/jenkins_home/casc_secrets",
+	})
+
 	// user-specified environment variables
 	for envVar, envVarVal := range jenkinsInstance.Spec.Env {
 		env = append(env, corev1.EnvVar{
@@ -1225,6 +1201,50 @@ func (bc *ReconcileJenkinsInstance) newDeployment(instanceName types.NamespacedN
 	var replicas int32 = JenkinsReplicas
 	var runAsUser int64 = 0
 
+	// map the configuration-as-code files from setup secret
+	setupSecret, err := bc.getSetupSecret(instanceName)
+	if err != nil {
+		return nil, err
+	}
+	var cascKeys []corev1.KeyToPath
+	for index, _ := range setupSecret.Data {
+		if strings.HasPrefix(index, "plugin-") {
+			cascKeys = append(cascKeys, corev1.KeyToPath {
+				Key: index,
+				Path: index,
+			})
+		}
+	}
+	// add the jenkins.yaml casc config
+	cascKeys = append(cascKeys, corev1.KeyToPath {
+		Key: "jenkins.yaml",
+		Path: "jenkins.yaml",
+	})
+
+	// setup volumes
+	deploymentVolumes := []corev1.Volume {
+		{
+			Name: "casc_configs",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: jenkinsInstance.GetName(),
+					Items: cascKeys,
+				},
+			},
+		},
+		{
+			Name:         "job-storage",
+			VolumeSource: volumeSource,
+		},
+	}
+	// add casc secrets
+	for _, secret := range jenkinsInstance.Spec.CascSecrets {
+		deploymentVolumes = append(deploymentVolumes, corev1.Volume{
+			Name: secret.Secret,
+		})
+	}
+
+
 	if exists {
 		deploymentCopy := deployment.DeepCopy()
 		deploymentCopy.Annotations = jenkinsInstance.Spec.Annotations
@@ -1259,9 +1279,9 @@ func (bc *ReconcileJenkinsInstance) newDeployment(instanceName types.NamespacedN
 				ImagePullPolicy: JenkinsPullPolicy,
 				VolumeMounts: []corev1.VolumeMount{
 					{
-						Name:      "init-groovy-d",
-						ReadOnly:  false,
-						MountPath: "/var/jenkins_home/init.groovy.d",
+						Name:      "casc_configs",
+						ReadOnly:  true,
+						MountPath: "/var/jenkins_home/casc_configs",
 					},
 					{
 						Name:      "job-storage",
@@ -1273,10 +1293,11 @@ func (bc *ReconcileJenkinsInstance) newDeployment(instanceName types.NamespacedN
 		}
 		deploymentCopy.Spec.Template.Spec.Volumes = []corev1.Volume{
 			{
-				Name: "init-groovy-d",
+				Name: "casc_configs",
 				VolumeSource: corev1.VolumeSource{
 					Secret: &corev1.SecretVolumeSource{
 						SecretName: jenkinsInstance.GetName(),
+						Items: cascKeys,
 					},
 				},
 			},
@@ -1349,9 +1370,9 @@ func (bc *ReconcileJenkinsInstance) newDeployment(instanceName types.NamespacedN
 								ImagePullPolicy: JenkinsPullPolicy,
 								VolumeMounts: []corev1.VolumeMount{
 									{
-										Name:      "init-groovy-d",
-										ReadOnly:  false,
-										MountPath: "/var/jenkins_home/init.groovy.d",
+										Name:      "casc_configs",
+										ReadOnly:  true,
+										MountPath: "/var/jenkins_home/casc_configs",
 									},
 									{
 										Name:      "job-storage",
@@ -1364,10 +1385,11 @@ func (bc *ReconcileJenkinsInstance) newDeployment(instanceName types.NamespacedN
 
 						Volumes: []corev1.Volume{
 							{
-								Name: "init-groovy-d",
+								Name: "casc_configs",
 								VolumeSource: corev1.VolumeSource{
 									Secret: &corev1.SecretVolumeSource{
 										SecretName: jenkinsInstance.GetName(),
+										Items: cascKeys,
 									},
 								},
 							},

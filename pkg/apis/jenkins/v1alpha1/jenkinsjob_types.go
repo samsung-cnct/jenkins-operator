@@ -20,9 +20,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 const (
 	JenkinsJobSecretUserPass = "usernamePassword"
 	JenkinsJobSecretText     = "secretText"
@@ -92,6 +89,9 @@ type JenkinsJobSpec struct {
 
 	// Content of a jenkins job in form of Jenkins JobDSL
 	JobDsl string `json:"jobdsl,omitempty"`
+
+	// Delete job in jenkins when job CR is deleted
+	Cleanup bool `json:"cleanup,omitempty"`
 
 	// Jenkins secret data
 	Credentials []JenkinsCredentialSpec `json:"credentials,omitempty"`

@@ -2,6 +2,10 @@ plugins:
   sites:
     - id: "default"
       url: "https://updates.jenkins.io/update-center.json"
+  required:
+{{ range $key, $value := .Plugins }}
+    {{ $key }}: {{ $value }}
+{{ end }}
 jenkins:
   agentProtocols:
     - "JNLP4-connect"
