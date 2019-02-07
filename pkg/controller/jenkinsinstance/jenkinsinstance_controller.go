@@ -1237,13 +1237,78 @@ func (bc *ReconcileJenkinsInstance) newDeployment(instanceName types.NamespacedN
 			VolumeSource: volumeSource,
 		},
 	}
+
 	// add casc secrets
-	for _, secret := range jenkinsInstance.Spec.CascSecrets {
-		deploymentVolumes = append(deploymentVolumes, corev1.Volume{
-			Name: secret.Secret,
-		})
+	if jenkinsInstance.Spec.CascSecrets != nil {
+		for _, secret := range jenkinsInstance.Spec.CascSecrets {
+			deploymentVolumes = append(deploymentVolumes, corev1.Volume{
+				Name: secret.Secret,
+			})
+		}
+	}
+	// add groovy secrets
+	if jenkinsInstance.Spec.GroovySecrets != nil {
+		for _, secret := range jenkinsInstance.Spec.GroovySecrets {
+			deploymentVolumes = append(deploymentVolumes, corev1.Volume{
+				Name: secret.Secret,
+			})
+		}
 	}
 
+
+	// setup volume mounts
+	deploymentVolumeMounts := []corev1.VolumeMount{
+		{
+			Name:      "casc_configs",
+			ReadOnly:  true,
+			MountPath: "/var/jenkins_home/casc_configs",
+		},
+		{
+			Name:      "job-storage",
+			ReadOnly:  false,
+			MountPath: "/var/jenkins_home/jobs",
+		},
+	}
+	// add casc secrets
+	if jenkinsInstance.Spec.CascSecrets != nil {
+		for _, secret := range jenkinsInstance.Spec.CascSecrets {
+			cascSecret := &corev1.Secret{}
+			err := bc.Client.Get(context.TODO(), types.NewNamespacedNameFromString(
+				fmt.Sprintf("%s%c%s", instanceName.Namespace, types.Separator, secret.Secret)), cascSecret)
+			if err != nil {
+				return nil, err
+			}
+
+			for cascSecretKeyName, _ := range cascSecret.Data {
+				deploymentVolumeMounts = append(deploymentVolumeMounts, corev1.VolumeMount{
+					Name:      secret.Secret,
+					MountPath: "/var/jenkins_home/casc_secrets",
+					ReadOnly:  true,
+					SubPath:   cascSecretKeyName,
+				})
+			}
+		}
+	}
+	// add groovy secrets
+	if jenkinsInstance.Spec.GroovySecrets != nil {
+		for _, secret := range jenkinsInstance.Spec.GroovySecrets {
+			groovySecret := &corev1.Secret{}
+			err := bc.Client.Get(context.TODO(), types.NewNamespacedNameFromString(
+				fmt.Sprintf("%s%c%s", instanceName.Namespace, types.Separator, secret.Secret)), groovySecret)
+			if err != nil {
+				return nil, err
+			}
+
+			for groovySecretKeyName, _ := range groovySecret.Data {
+				deploymentVolumeMounts = append(deploymentVolumeMounts, corev1.VolumeMount{
+					Name:      secret.Secret,
+					MountPath: "/var/jenkins_home/init.groovy.d",
+					ReadOnly:  true,
+					SubPath:   groovySecretKeyName,
+				})
+			}
+		}
+	}
 
 	if exists {
 		deploymentCopy := deployment.DeepCopy()
@@ -1277,35 +1342,10 @@ func (bc *ReconcileJenkinsInstance) newDeployment(instanceName types.NamespacedN
 					commandString,
 				},
 				ImagePullPolicy: JenkinsPullPolicy,
-				VolumeMounts: []corev1.VolumeMount{
-					{
-						Name:      "casc_configs",
-						ReadOnly:  true,
-						MountPath: "/var/jenkins_home/casc_configs",
-					},
-					{
-						Name:      "job-storage",
-						ReadOnly:  false,
-						MountPath: "/var/jenkins_home/jobs",
-					},
-				},
+				VolumeMounts: deploymentVolumeMounts,
 			},
 		}
-		deploymentCopy.Spec.Template.Spec.Volumes = []corev1.Volume{
-			{
-				Name: "casc_configs",
-				VolumeSource: corev1.VolumeSource{
-					Secret: &corev1.SecretVolumeSource{
-						SecretName: jenkinsInstance.GetName(),
-						Items: cascKeys,
-					},
-				},
-			},
-			{
-				Name:         "job-storage",
-				VolumeSource: volumeSource,
-			},
-		}
+		deploymentCopy.Spec.Template.Spec.Volumes = deploymentVolumes
 		deploymentCopy.Spec.Template.Spec.ServiceAccountName = jenkinsInstance.Spec.ServiceAccount
 
 		changed := reflect.DeepEqual(deploymentCopy.Annotations, deployment.Annotations) &&
@@ -1368,36 +1408,11 @@ func (bc *ReconcileJenkinsInstance) newDeployment(instanceName types.NamespacedN
 									commandString,
 								},
 								ImagePullPolicy: JenkinsPullPolicy,
-								VolumeMounts: []corev1.VolumeMount{
-									{
-										Name:      "casc_configs",
-										ReadOnly:  true,
-										MountPath: "/var/jenkins_home/casc_configs",
-									},
-									{
-										Name:      "job-storage",
-										ReadOnly:  false,
-										MountPath: "/var/jenkins_home/jobs",
-									},
-								},
+								VolumeMounts: deploymentVolumeMounts,
 							},
 						},
 
-						Volumes: []corev1.Volume{
-							{
-								Name: "casc_configs",
-								VolumeSource: corev1.VolumeSource{
-									Secret: &corev1.SecretVolumeSource{
-										SecretName: jenkinsInstance.GetName(),
-										Items: cascKeys,
-									},
-								},
-							},
-							{
-								Name:         "job-storage",
-								VolumeSource: volumeSource,
-							},
-						},
+						Volumes: deploymentVolumes,
 					},
 				},
 			},

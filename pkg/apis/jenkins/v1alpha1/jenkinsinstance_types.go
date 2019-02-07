@@ -40,6 +40,11 @@ type CascSecretSpec struct {
 	Secret string `json:"secret"`
 }
 
+type GroovySecretSpec struct {
+	// name of a kubernetes secret to be mounted into /var/jenkins/init.groovy.d
+	Secret string `json:"secret"`
+}
+
 type ServiceSpec struct {
 	// Jenkins service name
 	Name string `json:"name,omitempty"`
@@ -96,6 +101,9 @@ type JenkinsInstanceSpec struct {
 
 	// Array of configuration-as-code secret names
 	CascSecrets []CascSecretSpec `json:"cascsecrets,omitempty"`
+
+	// Array of groovy configuration secret names
+	GroovySecrets []GroovySecretSpec `json:"groovysecrets,omitempty"`
 
 	// Jenkins deployment annotations
 	Annotations map[string]string `json:"annotations,omitempty"`

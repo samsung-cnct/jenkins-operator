@@ -2,9 +2,11 @@ plugins:
   sites:
     - id: "default"
       url: "https://updates.jenkins.io/update-center.json"
+{{ if .Plugins }}
   required:
 {{ range $key, $value := .Plugins }}
     {{ $key }}: {{ $value }}
+{{ end }}
 {{ end }}
 jenkins:
   agentProtocols:
