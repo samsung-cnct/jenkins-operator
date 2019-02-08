@@ -28,11 +28,31 @@ spec:
               type: string
             annotations:
               type: object
+            cascsecrets:
+              items:
+                properties:
+                  secret:
+                    type: string
+                required:
+                - secret
+                type: object
+              type: array
+            credentials:
+              type: string
             env:
               type: object
             executors:
               format: int32
               type: integer
+            groovysecrets:
+              items:
+                properties:
+                  secret:
+                    type: string
+                required:
+                - secret
+                type: object
+              type: array
             image:
               pattern: .+:.+
               type: string
@@ -51,16 +71,11 @@ spec:
               type: string
             networkpolicy:
               type: boolean
-            pluginconfig:
-              properties:
-                config:
-                  type: string
-                configsecret:
-                  type: string
-              type: object
             plugins:
               items:
                 properties:
+                  config:
+                    type: string
                   id:
                     type: string
                   version:

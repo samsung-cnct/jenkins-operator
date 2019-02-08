@@ -501,13 +501,14 @@ func (bc *ReconcileJenkinsInstance) newSetupSecret(instanceName types.Namespaced
 	}
 
 	type JenkinsInfo struct {
-		Plugins    map[string]string
-		User       string
-		Password   string
-		Url        string
-		AdminEmail string
-		AgentPort  int32
-		Executors  int32
+		Plugins     map[string]string
+		Credentials string
+		User        string
+		Password    string
+		Url         string
+		AdminEmail  string
+		AgentPort   int32
+		Executors   int32
 	}
 
 	adminSecret, err := bc.getAdminSecret(instanceName)
@@ -523,34 +524,24 @@ func (bc *ReconcileJenkinsInstance) newSetupSecret(instanceName types.Namespaced
 	}
 
 	jenkinsInfo := JenkinsInfo{
-		Plugins:    make(map[string]string),
-		User:       string(adminUser[:]),
-		Password:   string(adminPassword[:]),
-		Url:        jenkinsInstance.Spec.Location,
-		AdminEmail: jenkinsInstance.Spec.AdminEmail,
-		AgentPort:  JenkinsAgentPort,
-		Executors:  jenkinsInstance.Spec.Executors,
+		Plugins:     make(map[string]string),
+		Credentials: jenkinsInstance.Spec.Credentials,
+		User:        string(adminUser[:]),
+		Password:    string(adminPassword[:]),
+		Url:         jenkinsInstance.Spec.Location,
+		AdminEmail:  jenkinsInstance.Spec.AdminEmail,
+		AgentPort:   JenkinsAgentPort,
+		Executors:   jenkinsInstance.Spec.Executors,
 	}
 
 	// parse the plugin array
-	requiredPlugin, err := configdata.Asset("environment/required-plugins")
+	requiredPlugins, err := configdata.Asset("environment/required-plugins")
 	if err != nil {
 		return nil, err
 	}
+
+	// add user plugins to setup secret jenkins.yaml
 	plugins := jenkinsInstance.Spec.Plugins
-
-	// add required plugins first
-	scanner := bufio.NewScanner(strings.NewReader(string(requiredPlugin[:])))
-	for scanner.Scan() {
-		parts := strings.Split(scanner.Text(), ":")
-		if len(parts) < 2 {
-			return nil, fmt.Errorf("invalid format of default plugins: %s", scanner.Text())
-		}
-
-		jenkinsInfo.Plugins[parts[0]] = parts[1]
-	}
-
-	// add user plugins next
 	for _, plugin := range plugins {
 		jenkinsInfo.Plugins[plugin.Id] = plugin.Version
 	}
@@ -570,6 +561,7 @@ func (bc *ReconcileJenkinsInstance) newSetupSecret(instanceName types.Namespaced
 	byteData := map[string][]byte{
 		"jenkins.yaml": []byte(jenkinsConfigParsed.String()),
 		"user":         []byte(adminUser),
+		"plugins.txt":  requiredPlugins,
 	}
 
 	// add plugin configurations
@@ -1122,7 +1114,7 @@ func (bc *ReconcileJenkinsInstance) newDeployment(instanceName types.NamespacedN
 
 	// build a command string to install plugins and launch jenkins
 	commandString := ""
-	commandString += "/usr/local/bin/install-plugins.sh $(cat /var/jenkins_home/init.groovy.d/plugins.txt | tr '\\n' ' ') && "
+	commandString += "/usr/local/bin/install-plugins.sh $(cat /var/jenkins_home/required_plugins/plugins.txt | tr '\\n' ' ') && "
 	commandString += "/sbin/tini -- /usr/local/bin/jenkins.sh"
 	commandString += ""
 
@@ -1209,26 +1201,40 @@ func (bc *ReconcileJenkinsInstance) newDeployment(instanceName types.NamespacedN
 	var cascKeys []corev1.KeyToPath
 	for index, _ := range setupSecret.Data {
 		if strings.HasPrefix(index, "plugin-") {
-			cascKeys = append(cascKeys, corev1.KeyToPath {
-				Key: index,
+			cascKeys = append(cascKeys, corev1.KeyToPath{
+				Key:  index,
 				Path: index,
 			})
 		}
 	}
 	// add the jenkins.yaml casc config
-	cascKeys = append(cascKeys, corev1.KeyToPath {
-		Key: "jenkins.yaml",
+	cascKeys = append(cascKeys, corev1.KeyToPath{
+		Key:  "jenkins.yaml",
 		Path: "jenkins.yaml",
 	})
 
 	// setup volumes
-	deploymentVolumes := []corev1.Volume {
+	deploymentVolumes := []corev1.Volume{
 		{
-			Name: "casc_configs",
+			Name: "casc-configs",
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
 					SecretName: jenkinsInstance.GetName(),
-					Items: cascKeys,
+					Items:      cascKeys,
+				},
+			},
+		},
+		{
+			Name: "required-plugins",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: jenkinsInstance.GetName(),
+					Items: []corev1.KeyToPath{
+						{
+							Key:  "plugins.txt",
+							Path: "plugins.txt",
+						},
+					},
 				},
 			},
 		},
@@ -1255,11 +1261,10 @@ func (bc *ReconcileJenkinsInstance) newDeployment(instanceName types.NamespacedN
 		}
 	}
 
-
 	// setup volume mounts
 	deploymentVolumeMounts := []corev1.VolumeMount{
 		{
-			Name:      "casc_configs",
+			Name:      "casc-configs",
 			ReadOnly:  true,
 			MountPath: "/var/jenkins_home/casc_configs",
 		},
@@ -1267,6 +1272,11 @@ func (bc *ReconcileJenkinsInstance) newDeployment(instanceName types.NamespacedN
 			Name:      "job-storage",
 			ReadOnly:  false,
 			MountPath: "/var/jenkins_home/jobs",
+		},
+		{
+			Name:      "required-plugins",
+			ReadOnly:  true,
+			MountPath: "/var/jenkins_home/required_plugins",
 		},
 	}
 	// add casc secrets
@@ -1342,7 +1352,7 @@ func (bc *ReconcileJenkinsInstance) newDeployment(instanceName types.NamespacedN
 					commandString,
 				},
 				ImagePullPolicy: JenkinsPullPolicy,
-				VolumeMounts: deploymentVolumeMounts,
+				VolumeMounts:    deploymentVolumeMounts,
 			},
 		}
 		deploymentCopy.Spec.Template.Spec.Volumes = deploymentVolumes
@@ -1408,7 +1418,7 @@ func (bc *ReconcileJenkinsInstance) newDeployment(instanceName types.NamespacedN
 									commandString,
 								},
 								ImagePullPolicy: JenkinsPullPolicy,
-								VolumeMounts: deploymentVolumeMounts,
+								VolumeMounts:    deploymentVolumeMounts,
 							},
 						},
 

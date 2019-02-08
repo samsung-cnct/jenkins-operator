@@ -47,8 +47,8 @@ const (
 	pluginVersion = "1.12.4"
 	annotation    = "cnct.io/annotation"
 	secret        = "test-admin-secret"
-	pluginsecret  = "test-plugin-secret"
-	secretWithPVC = "test-admin-secret-pvc"
+	cascSecretN   = "test-casc-secret"
+	groovySecretN = "test-groovy-secret"
 	location      = "http://test-jenkins.cnct.io"
 	email         = "admin@cnct.io"
 	serviceType   = "NodePort"
@@ -56,9 +56,24 @@ const (
 	accessMode    = "ReadWriteOnce"
 	storageSize   = "1Gi"
 	executors     = 3
-	groovyConfig  = `
-def inputFile = new File("/var/jenkins_home/userContent/test")
-inputFile.write("Hello World !")`
+	pluginConfig  = `
+unclassified:
+  githubpluginconfig:
+    configs:
+    - name: "InHouse GitHub EE"
+      apiUrl: "https://github.domain.local/api/v3"
+      credentialsId: "[GitHubEEUser]"
+      manageHooks: true`
+	credentialConfig = `
+credentials:
+  system:
+    domainCredentials:
+		credentials:
+          - usernamePassword:
+              scope:    SYSTEM
+              id:       sudo_password
+              username: root
+              password: ${PASSWORD_CRED}`
 )
 
 var _ = Describe("jenkins instance controller", func() {
@@ -97,7 +112,8 @@ var _ = Describe("jenkins instance controller", func() {
 		var expectedRequest reconcile.Request
 		var standardObjectkey types.NamespacedName
 		var adminSecret *corev1.Secret
-		var pluginSecret *corev1.Secret
+		var cascSecret *corev1.Secret
+		var groovySecret *corev1.Secret
 		var serviceAccount *corev1.ServiceAccount
 
 		BeforeEach(func() {
@@ -121,21 +137,36 @@ var _ = Describe("jenkins instance controller", func() {
 				return c.Get(context.TODO(), types.NamespacedName{Name: secret, Namespace: namespace}, adminSecret)
 			}, timeout).Should(Succeed())
 
-			pluginSecret = &corev1.Secret{
+			cascSecret = &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      pluginsecret,
+					Name:      cascSecretN,
 					Namespace: namespace,
 				},
 				Type: corev1.SecretTypeOpaque,
 				Data: map[string][]byte{
 
-					"one": []byte("dummy"),
-					"two": []byte("dummy"),
+					"PASSWORD_CRED": []byte("dummy"),
 				},
 			}
-			Expect(c.Create(context.TODO(), pluginSecret)).NotTo(HaveOccurred())
+			Expect(c.Create(context.TODO(), cascSecret)).NotTo(HaveOccurred())
 			Eventually(func() error {
-				return c.Get(context.TODO(), types.NamespacedName{Name: pluginsecret, Namespace: namespace}, pluginSecret)
+				return c.Get(context.TODO(), types.NamespacedName{Name: cascSecretN, Namespace: namespace}, cascSecret)
+			}, timeout).Should(Succeed())
+
+			groovySecret = &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      groovySecretN,
+					Namespace: namespace,
+				},
+				Type: corev1.SecretTypeOpaque,
+				Data: map[string][]byte{
+
+					"09-config.groovy": []byte("def inputFile = new File(\"/var/jenkins_home/userContent/test\");inputFile.write(\"Hello World !\")"),
+				},
+			}
+			Expect(c.Create(context.TODO(), groovySecret)).NotTo(HaveOccurred())
+			Eventually(func() error {
+				return c.Get(context.TODO(), types.NamespacedName{Name: groovySecretN, Namespace: namespace}, groovySecret)
 			}, timeout).Should(Succeed())
 
 			serviceAccount = &corev1.ServiceAccount{
@@ -163,6 +194,18 @@ var _ = Describe("jenkins instance controller", func() {
 						{
 							Id:      plugin,
 							Version: pluginVersion,
+							Config:  pluginConfig,
+						},
+					},
+					Credentials: credentialConfig,
+					CascSecrets: []jenkinsv1alpha1.CascSecretSpec{
+						{
+							Secret: cascSecretN,
+						},
+					},
+					GroovySecrets: []jenkinsv1alpha1.GroovySecretSpec{
+						{
+							Secret: groovySecretN,
 						},
 					},
 					Annotations: map[string]string{
@@ -186,10 +229,6 @@ var _ = Describe("jenkins instance controller", func() {
 						Path: path,
 					},
 					NetworkPolicy: true,
-					PluginConfig: &jenkinsv1alpha1.PluginConfigSpec{
-						Config:       groovyConfig,
-						ConfigSecret: pluginsecret,
-					},
 					Storage: &jenkinsv1alpha1.StorageSpec{
 						JobsPvc: name,
 						JobsPvcSpec: &corev1.PersistentVolumeClaimSpec{
@@ -261,9 +300,14 @@ var _ = Describe("jenkins instance controller", func() {
 				return c.Get(context.TODO(), types.NamespacedName{Name: secret, Namespace: namespace}, adminSecret)
 			}, timeout).ShouldNot(Succeed())
 
-			Expect(c.Delete(context.TODO(), pluginSecret)).NotTo(HaveOccurred())
+			Expect(c.Delete(context.TODO(), cascSecret)).NotTo(HaveOccurred())
 			Eventually(func() error {
-				return c.Get(context.TODO(), types.NamespacedName{Name: pluginsecret, Namespace: namespace}, pluginSecret)
+				return c.Get(context.TODO(), types.NamespacedName{Name: cascSecretN, Namespace: namespace}, cascSecret)
+			}, timeout).ShouldNot(Succeed())
+
+			Expect(c.Delete(context.TODO(), groovySecret)).NotTo(HaveOccurred())
+			Eventually(func() error {
+				return c.Get(context.TODO(), types.NamespacedName{Name: groovySecretN, Namespace: namespace}, groovySecret)
 			}, timeout).ShouldNot(Succeed())
 
 			Expect(c.Delete(context.TODO(), serviceAccount)).NotTo(HaveOccurred())

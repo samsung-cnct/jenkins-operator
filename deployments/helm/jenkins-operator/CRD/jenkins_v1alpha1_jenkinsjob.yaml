@@ -27,6 +27,8 @@ spec:
           type: object
         spec:
           properties:
+            cleanup:
+              type: boolean
             credentials:
               items:
                 properties:

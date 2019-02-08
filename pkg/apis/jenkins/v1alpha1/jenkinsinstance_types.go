@@ -30,11 +30,6 @@ type PluginSpec struct {
 	Config string `json:"config,omitempty"`
 }
 
-type CredentialSpec struct {
-	// config stored as multiline string of jenkins-configuration-as-code
-	Config string `json:"config"`
-}
-
 type CascSecretSpec struct {
 	// name of a kubernetes secret to be mounted into /secrets/jenkins
 	Secret string `json:"secret"`
@@ -96,8 +91,8 @@ type JenkinsInstanceSpec struct {
 	// Array of plugin configurations
 	Plugins []PluginSpec `json:"plugins,omitempty"`
 
-	// Array of credential configurations
-	Credentials []CredentialSpec `json:"credentials,omitempty"`
+	// Config stored as multiline string of jenkins-configuration-as-code
+	Credentials string `json:"credentials,omitempty"`
 
 	// Array of configuration-as-code secret names
 	CascSecrets []CascSecretSpec `json:"cascsecrets,omitempty"`

@@ -78,3 +78,6 @@ tool:
           installers:
             - jdkInstaller:
                 acceptLicense: false
+{{ if .Credentials }}
+{{ .Credentials }}
+{{ end }}
