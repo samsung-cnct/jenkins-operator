@@ -58,6 +58,21 @@ spec:
               description: What container image to use for a new jenkins instance
               pattern: .+:.+
               type: string
+            plugins:
+              description: Array of plugins to be installed
+              items:
+                properties:
+                  id:
+                    description: plugin id
+                    type: string
+                  version:
+                    description: plugin version string, follows the format at https://github.com/jenkinsci/docker#plugin-version-format
+                    type: string
+                required:
+                - id
+                - version
+                type: object
+              type: array
             service:
               description: Jenkins service options
               properties:

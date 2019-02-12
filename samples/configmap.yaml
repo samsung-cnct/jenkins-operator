@@ -4,9 +4,6 @@ metadata:
   name: jenkins-config
 data:
   jenkins: |
-    plugins:
-      required:
-        kubernetes: 1.14.3
     jobs:
       - script: >
            pipelineJob('casc-job') {
@@ -53,9 +50,6 @@ data:
               password: ${JENKINS_ADMIN_PASSWORD}
       slaveAgentPort: 50000
       systemMessage: "jenkins-operator managed Jenkins instance\n\n"
-      views:
-        - all:
-            name: "all"
       clouds:
         - kubernetes:
             name: "casc-k8s-config"
@@ -91,13 +85,13 @@ data:
     credentials:
       system:
         domainCredentials:
-        credentials:
+        - credentials:
               - fileSystemServiceAccountCredential:
                   description: "File system service acount credential from CASC plugin"
                   id: "casc-k8s-config-credentials"
                   scope: GLOBAL
               - usernamePassword:
-                  scope:    SYSTEM
+                  scope:    GLOBAL
                   id:       casc-username-password
                   username: root
                   password: ${SUDO_PASSWORD}

@@ -8,6 +8,13 @@ spec:
   image: "jenkins/jenkins:lts"
   env:
     SOME_ENV: "test"
+  plugins:
+    - id: build-blocker-plugin
+      version: latest
+    - id: authorize-project
+      version: latest
+    - id: kubernetes
+      version: latest
   cascconfig:
     configmap: jenkins-config
   cascsecret: jenkins-admin-secret

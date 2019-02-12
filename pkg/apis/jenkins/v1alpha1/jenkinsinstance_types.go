@@ -66,6 +66,14 @@ type StorageSpec struct {
 	JobsPvcSpec *corev1.PersistentVolumeClaimSpec `json:"jobspvcspec,omitempty"`
 }
 
+type PluginSpec struct {
+	// plugin id
+	Id string `json:"id"`
+
+	// plugin version string, follows the format at https://github.com/jenkinsci/docker#plugin-version-format
+	Version string `json:"version"`
+}
+
 // JenkinsInstanceSpec defines the desired state of JenkinsInstance
 type JenkinsInstanceSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
@@ -76,6 +84,9 @@ type JenkinsInstanceSpec struct {
 
 	// Dictionary of environment variable values
 	Env map[string]string `json:"env,omitempty"`
+
+	// Array of plugins to be installed
+	Plugins []PluginSpec `json:"plugins,omitempty"`
 
 	// configuration-as-code spec
 	CascConfig *CascConfigSpec `json:"cascconfig,omitempty"`

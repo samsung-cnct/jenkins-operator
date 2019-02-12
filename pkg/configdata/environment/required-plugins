@@ -1,7 +1,6 @@
 credentials:latest
-build-blocker-plugin:latest
 job-dsl:latest
-authorize-project:latest
 workflow-aggregator:latest
 configuration-as-code:latest
 configuration-as-code-support:latest
+jdk-tool:latest

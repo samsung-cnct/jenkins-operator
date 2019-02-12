@@ -371,10 +371,8 @@ func (bc *ReconcileJenkinsInstance) updateJenkinsInstanceStatus(instanceName typ
 	doUpdate := jenkinsInstance.Status.Phase != JenkinsInstancePhaseReady
 
 	if doUpdate {
-		jenkinsInstanceCopy := jenkinsInstance.DeepCopy()
-		jenkinsInstanceCopy.Status.Phase = JenkinsInstancePhaseReady
-
-		err = bc.Client.Update(context.TODO(), jenkinsInstanceCopy)
+		jenkinsInstance.Status.Phase = JenkinsInstancePhaseReady
+		err = bc.Status().Update(context.Background(), jenkinsInstance)
 		if err != nil {
 			return err
 		}
@@ -423,9 +421,35 @@ func (bc *ReconcileJenkinsInstance) newSetupConfigMap(instanceName types.Namespa
 		return nil, err
 	}
 
+	var pluginList []string
+
+	// add required plugins first
+	scanner := bufio.NewScanner(strings.NewReader(string(requiredPlugins[:])))
+	for scanner.Scan() {
+		pluginList = append(pluginList, scanner.Text())
+	}
+
+	if jenkinsInstance.Spec.Plugins != nil {
+		for _, plugin := range jenkinsInstance.Spec.Plugins {
+			isAlreadyRequired := false
+			for _, addedPlugin := range pluginList {
+				components := strings.Split(addedPlugin, ":")
+				if strings.EqualFold(components[0], plugin.Id) {
+					isAlreadyRequired = true
+					break
+				}
+			}
+
+			if !isAlreadyRequired {
+				pluginInfo := fmt.Sprintf("%s:%s", plugin.Id, plugin.Version)
+				pluginList = append(pluginList, pluginInfo)
+			}
+		}
+	}
+
 	// add things to the string data
 	stringData := map[string]string{
-		"plugins.txt": string(requiredPlugins[:]),
+		"plugins.txt": strings.Join(pluginList, "\n"),
 	}
 	if jenkinsInstance.Spec.CascConfig.ConfigString != "" {
 		stringData["jenkins.yaml"] = jenkinsInstance.Spec.CascConfig.ConfigString
@@ -941,7 +965,7 @@ func (bc *ReconcileJenkinsInstance) newDeployment(instanceName types.NamespacedN
 		deploymentVolumeMounts = append(deploymentVolumeMounts, corev1.VolumeMount{
 			Name:      "groovy-secret",
 			ReadOnly:  false,
-			MountPath: "/var/var/jenkins_home/init.groovy.d",
+			MountPath: "/var/jenkins_home/init.groovy.d",
 		})
 	}
 

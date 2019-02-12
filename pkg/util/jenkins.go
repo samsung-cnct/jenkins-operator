@@ -141,7 +141,7 @@ func CheckJenkinsReady(service *corev1.Service, masterPort int32) error {
 	if resp.StatusCode == 200 {
 		return nil
 	} else {
-		return fmt.Errorf("jenkins not ready, repsponse code %d", resp.StatusCode)
+		return fmt.Errorf("jenkins not ready, code %d", resp.StatusCode)
 	}
 
 }
