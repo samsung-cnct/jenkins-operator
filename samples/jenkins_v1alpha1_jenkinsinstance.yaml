@@ -8,30 +8,21 @@ spec:
   image: "jenkins/jenkins:lts"
   env:
     SOME_ENV: "test"
-  plugins:
-    - id:  config-file-provider
-      version: "3.1"
+  cascconfig:
+    configmap: jenkins-config
+  cascsecret: jenkins-admin-secret
+  groovysecret: jenkins-groovy-secret
   annotations:
     cnct.io/annotation: "test"
     cnct.io/other-annotation: "other test"
-  executors: 2
-  adminsecret: jenkins-test
-  location: https://jenkins.example.com
-  adminemail: admin@example.com
+  executors: 5
+  adminsecret: jenkins-admin-secret
   service:
     name: jenkins
     servicetype: NodePort
     annotations:
       cnct.io/service-annotation: "test"
       cnct.io/other-service-annotation: "other test"
-  ingress:
-    annotations:
-      cnct.io/ingress-annotation: "test"
-      cnct.io/other-ingress-annotation: "other test"
-    service: jenkins
-    path: /
-#  serviceaccount: jenkins
-  networkpolicy: true
   storage:
     jobspvc: jenkins
     jobspvcspec:
@@ -40,30 +31,4 @@ spec:
       resources:
         requests:
           storage: 1G
-
-  pluginconfig:
-    configsecret: pluginconfigs
-    config: |
-      import hudson.*
-      import hudson.model.*
-      import jenkins.model.*
-      import jenkins.model.Jenkins.*
-      import org.jenkinsci.plugins.configfiles.*
-      import org.jenkinsci.lib.configprovider.model.*
-      import org.jenkinsci.plugins.configfiles.groovy.*
-      import org.jenkinsci.plugins.configfiles.*
-
-      GlobalConfigFiles globalConfigFiles = Jenkins.getInstance().getExtensionList(GlobalConfigFiles.class).get(GlobalConfigFiles.class);
-      ConfigFileStore store = globalConfigFiles.get();
-
-      String defaultJenkinsfile = """import io.cnct.pipeline.*
-      new cnctPipeline().execute()"""
-
-      Config config = new GroovyScript(
-        'Jenkinsfile',
-        'Jenkinsfile',
-        'Default pipeline Jenkinsfile',
-        defaultJenkinsfile,
-        'org.jenkinsci.plugins.configfiles.groovy.GroovyScript');
-      store.save(config);
 

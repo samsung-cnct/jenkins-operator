@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/golang/glog"
 	"github.com/maratoid/jenkins-operator/pkg/test"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -15,8 +16,8 @@ import (
 )
 
 // MergeSecretData merges secret Data map
-func MergeSecretData(ms ...map[string][]byte) map[string][]byte {
-	res := map[string][]byte{}
+func MergeData(ms ...map[string]string) map[string]string {
+	res := map[string]string{}
 	for _, m := range ms {
 		for k, v := range m {
 			res[k] = v
@@ -128,6 +129,26 @@ func GetServiceEndpoint(service *corev1.Service, path string, internalPort int32
 			if host != "" {
 				break
 			}
+		}
+
+		if host == "" {
+			glog.Warningf("could not locate any nodes with an external IP. will attempt to fall back to internal IP")
+			for _, inst := range nodeList.Items {
+				for _, address := range inst.Status.Addresses {
+					if address.Type == corev1.NodeInternalIP {
+						host = address.Address
+						break
+					}
+				}
+
+				if host != "" {
+					break
+				}
+			}
+		}
+
+		if host == "" {
+			return "", fmt.Errorf("could not find a node with an available IP address")
 		}
 
 		var nodePort int32 = 0

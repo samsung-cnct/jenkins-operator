@@ -16,112 +16,99 @@ spec:
     kind: JenkinsInstance
     plural: jenkinsinstances
   scope: Namespaced
+  subresources:
+    status: {}
   validation:
     openAPIV3Schema:
       properties:
         apiVersion:
+          description: 'APIVersion defines the versioned schema of this representation
+            of an object. Servers should convert recognized schemas to the latest
+            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources'
           type: string
         kind:
+          description: 'Kind is a string value representing the REST resource this
+            object represents. Servers may infer this from the endpoint the client
+            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds'
           type: string
         metadata:
           type: object
         spec:
           properties:
-            adminemail:
-              type: string
             adminsecret:
               type: string
             annotations:
+              description: Jenkins deployment annotations
               type: object
-            cascsecrets:
-              items:
-                properties:
-                  secret:
-                    type: string
-                required:
-                - secret
-                type: object
-              type: array
-            credentials:
+            cascconfig:
+              description: configuration-as-code spec
+              properties:
+                configmap:
+                  description: or casc config(s) mounted from a named config map
+                  type: string
+                configstring:
+                  description: casc config as multi-line yaml string
+                  type: string
+              type: object
+            cascsecret:
+              description: configuration-as-code secret name
               type: string
             env:
+              description: Dictionary of environment variable values
               type: object
-            executors:
-              format: int32
-              type: integer
-            groovysecrets:
-              items:
-                properties:
-                  secret:
-                    type: string
-                required:
-                - secret
-                type: object
-              type: array
+            groovysecret:
+              description: groovy configuration secret name
+              type: string
             image:
+              description: What container image to use for a new jenkins instance
               pattern: .+:.+
               type: string
-            ingress:
-              properties:
-                annotations:
-                  type: object
-                path:
-                  type: string
-                service:
-                  type: string
-                tlssecret:
-                  type: string
-              type: object
-            location:
-              type: string
-            networkpolicy:
-              type: boolean
-            plugins:
-              items:
-                properties:
-                  config:
-                    type: string
-                  id:
-                    type: string
-                  version:
-                    type: string
-                type: object
-              type: array
             service:
+              description: Jenkins service options
               properties:
                 annotations:
+                  description: Jenkins service annotations
                   type: object
                 name:
+                  description: Jenkins service name
                   type: string
                 nodeport:
+                  description: If type is node port, use this node port value
                   format: int32
                   type: integer
                 servicetype:
+                  description: Jenkins instance service type
                   type: string
               type: object
             serviceaccount:
+              description: Service account name for jenkins to run under
               type: string
             storage:
+              description: Jenkins storage options
               properties:
                 jobspvc:
+                  description: Name of pre-existing (or not) PVC for jobs
                   type: string
                 jobspvcspec:
+                  description: If PVC is to be created, what is its spec
                   type: object
               type: object
           type: object
         status:
           properties:
             adminsecret:
+              description: setup secret
               type: string
             phase:
+              description: state if jenkins server instance
               type: string
           required:
           - phase
           type: object
-      type: object
   version: v1alpha1
 status:
   acceptedNames:
     kind: ""
     plural: ""
-  conditions: null
+  conditions: []
+  storedVersions: []

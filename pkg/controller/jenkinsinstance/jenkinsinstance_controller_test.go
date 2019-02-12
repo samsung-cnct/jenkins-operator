@@ -24,8 +24,6 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/api/extensions/v1beta1"
-	netv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -39,32 +37,55 @@ import (
 const (
 	timeout       = time.Second * 60
 	name          = "test-jenkins"
-	nameWithPVC   = "test-jenkins-pvc"
 	namespace     = "default"
 	image         = "jenkins/jenkins:lts"
 	envVar        = "TEST_ENV"
-	plugin        = "kubernetes"
-	pluginVersion = "1.12.4"
 	annotation    = "cnct.io/annotation"
 	secret        = "test-admin-secret"
 	cascSecretN   = "test-casc-secret"
+	cascConfigN   = "test-casc-config"
 	groovySecretN = "test-groovy-secret"
-	location      = "http://test-jenkins.cnct.io"
-	email         = "admin@cnct.io"
 	serviceType   = "NodePort"
-	path          = "/"
 	accessMode    = "ReadWriteOnce"
 	storageSize   = "1Gi"
-	executors     = 3
-	pluginConfig  = `
+	cascConfigC   = `
+jenkins:
+  agentProtocols:
+    - "JNLP4-connect"
+    - "Ping"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+  crumbIssuer:
+    standard:
+      excludeClientIPFromCrumb: false
+  disableRememberMe: false
+  mode: NORMAL
+  numExecutors: 1
+  primaryView:
+    all:
+      name: "all"
+  quietPeriod: 5
+  scmCheckoutRetryCount: 3
+  securityRealm:
+    local:
+      allowsSignup: false
+      enableCaptcha: false
+      users:
+        - id: admin
+          password: password
+  slaveAgentPort: 50000
+  systemMessage: "jenkins-operator managed Jenkins instance\n\n"
+  views:
+    - all:
+        name: "all"
 unclassified:
   githubpluginconfig:
     configs:
     - name: "InHouse GitHub EE"
       apiUrl: "https://github.domain.local/api/v3"
       credentialsId: "[GitHubEEUser]"
-      manageHooks: true`
-	credentialConfig = `
+      manageHooks: true
 credentials:
   system:
     domainCredentials:
@@ -74,6 +95,56 @@ credentials:
               id:       sudo_password
               username: root
               password: ${PASSWORD_CRED}`
+	cascConfigC2 = `
+jenkins:
+  agentProtocols:
+    - "JNLP4-connect"
+    - "Ping"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+  crumbIssuer:
+    standard:
+      excludeClientIPFromCrumb: false
+  disableRememberMe: false
+  mode: NORMAL
+  numExecutors: 1
+  primaryView:
+    all:
+      name: "all"
+  quietPeriod: 5
+  scmCheckoutRetryCount: 3
+  securityRealm:
+    local:
+      allowsSignup: false
+      enableCaptcha: false
+      users:
+        - id: admin
+          password: password
+  slaveAgentPort: 50000
+  systemMessage: "jenkins-operator managed Jenkins instance\n\n"
+  views:
+    - all:
+        name: "all"
+unclassified:
+  githubpluginconfig:
+    configs:
+    - name: "InHouse GitHub EE"
+      apiUrl: "https://github.domain.local/api/v3"
+      credentialsId: "[GitHubEEUser]"
+      manageHooks: true
+credentials:
+  system:
+    domainCredentials:
+		credentials:
+          - usernamePassword:
+              scope:    SYSTEM
+              id:       sudo_password
+              username: root
+              password: ${PASSWORD_CRED}
+security:
+  remotingCLI:
+    enabled: false`
 )
 
 var _ = Describe("jenkins instance controller", func() {
@@ -112,6 +183,7 @@ var _ = Describe("jenkins instance controller", func() {
 		var expectedRequest reconcile.Request
 		var standardObjectkey types.NamespacedName
 		var adminSecret *corev1.Secret
+		var cascConfig *corev1.ConfigMap
 		var cascSecret *corev1.Secret
 		var groovySecret *corev1.Secret
 		var serviceAccount *corev1.ServiceAccount
@@ -135,6 +207,20 @@ var _ = Describe("jenkins instance controller", func() {
 			Expect(c.Create(context.TODO(), adminSecret)).NotTo(HaveOccurred())
 			Eventually(func() error {
 				return c.Get(context.TODO(), types.NamespacedName{Name: secret, Namespace: namespace}, adminSecret)
+			}, timeout).Should(Succeed())
+
+			cascConfig = &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      cascConfigN,
+					Namespace: namespace,
+				},
+				Data: map[string]string{
+					"jenkins.yaml": cascConfigC,
+				},
+			}
+			Expect(c.Create(context.TODO(), cascConfig)).NotTo(HaveOccurred())
+			Eventually(func() error {
+				return c.Get(context.TODO(), types.NamespacedName{Name: cascConfigN, Namespace: namespace}, cascConfig)
 			}, timeout).Should(Succeed())
 
 			cascSecret = &corev1.Secret{
@@ -190,31 +276,15 @@ var _ = Describe("jenkins instance controller", func() {
 					Env: map[string]string{
 						envVar: envVar,
 					},
-					Plugins: []jenkinsv1alpha1.PluginSpec{
-						{
-							Id:      plugin,
-							Version: pluginVersion,
-							Config:  pluginConfig,
-						},
+					CascConfig: &jenkinsv1alpha1.CascConfigSpec{
+						ConfigMap: cascConfigN,
 					},
-					Credentials: credentialConfig,
-					CascSecrets: []jenkinsv1alpha1.CascSecretSpec{
-						{
-							Secret: cascSecretN,
-						},
-					},
-					GroovySecrets: []jenkinsv1alpha1.GroovySecretSpec{
-						{
-							Secret: groovySecretN,
-						},
-					},
+					CascSecret:   cascSecretN,
+					GroovySecret: groovySecretN,
 					Annotations: map[string]string{
 						annotation: annotation,
 					},
-					Executors:   executors,
 					AdminSecret: secret,
-					Location:    location,
-					AdminEmail:  email,
 					Service: &jenkinsv1alpha1.ServiceSpec{
 						Name:        name,
 						ServiceType: serviceType,
@@ -222,13 +292,6 @@ var _ = Describe("jenkins instance controller", func() {
 							annotation: annotation,
 						},
 					},
-					Ingress: &jenkinsv1alpha1.IngressSpec{
-						Annotations: map[string]string{
-							annotation: annotation,
-						},
-						Path: path,
-					},
-					NetworkPolicy: true,
 					Storage: &jenkinsv1alpha1.StorageSpec{
 						JobsPvc: name,
 						JobsPvcSpec: &corev1.PersistentVolumeClaimSpec{
@@ -257,17 +320,11 @@ var _ = Describe("jenkins instance controller", func() {
 				ShouldNot(Succeed())
 
 			// manually delete all objects, since garbage collection is not enabled in test control plane
-			setupSecret := &corev1.Secret{}
-			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, setupSecret) }, timeout).
+			setupConfigMap := &corev1.ConfigMap{}
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, setupConfigMap) }, timeout).
 				Should(Succeed())
 			service := &corev1.Service{}
 			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, service) }, timeout).
-				Should(Succeed())
-			ingress := &v1beta1.Ingress{}
-			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, ingress) }, timeout).
-				Should(Succeed())
-			policy := &netv1.NetworkPolicy{}
-			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, policy) }, timeout).
 				Should(Succeed())
 			pvc := &corev1.PersistentVolumeClaim{}
 			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, pvc) }, timeout).
@@ -276,17 +333,11 @@ var _ = Describe("jenkins instance controller", func() {
 			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, deployment) }, timeout).
 				Should(Succeed())
 
-			Eventually(func() error { return c.Delete(context.TODO(), setupSecret) }, timeout).Should(Succeed())
-			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, setupSecret) }, timeout).
+			Eventually(func() error { return c.Delete(context.TODO(), setupConfigMap) }, timeout).Should(Succeed())
+			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, setupConfigMap) }, timeout).
 				ShouldNot(Succeed())
 			Eventually(func() error { return c.Delete(context.TODO(), service) }, timeout).Should(Succeed())
 			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, service) }, timeout).
-				ShouldNot(Succeed())
-			Eventually(func() error { return c.Delete(context.TODO(), ingress) }, timeout).Should(Succeed())
-			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, ingress) }, timeout).
-				ShouldNot(Succeed())
-			Eventually(func() error { return c.Delete(context.TODO(), policy) }, timeout).Should(Succeed())
-			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, policy) }, timeout).
 				ShouldNot(Succeed())
 			Eventually(func() error { return c.Delete(context.TODO(), pvc) }, timeout).Should(Succeed())
 			Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, pvc) }, timeout).
@@ -305,6 +356,11 @@ var _ = Describe("jenkins instance controller", func() {
 				return c.Get(context.TODO(), types.NamespacedName{Name: cascSecretN, Namespace: namespace}, cascSecret)
 			}, timeout).ShouldNot(Succeed())
 
+			Expect(c.Delete(context.TODO(), cascConfig)).NotTo(HaveOccurred())
+			Eventually(func() error {
+				return c.Get(context.TODO(), types.NamespacedName{Name: cascConfigN, Namespace: namespace}, cascConfig)
+			}, timeout).ShouldNot(Succeed())
+
 			Expect(c.Delete(context.TODO(), groovySecret)).NotTo(HaveOccurred())
 			Eventually(func() error {
 				return c.Get(context.TODO(), types.NamespacedName{Name: groovySecretN, Namespace: namespace}, groovySecret)
@@ -318,16 +374,16 @@ var _ = Describe("jenkins instance controller", func() {
 
 		It("created", func() {
 			Context("Secret", func() {
-				setupSecret := &corev1.Secret{}
+				setupConfigMap := &corev1.ConfigMap{}
 				When("creating", func() {
-					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, setupSecret) }, timeout).
+					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, setupConfigMap) }, timeout).
 						Should(Succeed())
 				})
 
 				When("deleting", func() {
-					Expect(c.Delete(context.TODO(), setupSecret)).To(Succeed())
+					Expect(c.Delete(context.TODO(), setupConfigMap)).To(Succeed())
 					Eventually(requests, timeout).Should(Receive(Equal(expectedRequest)))
-					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, setupSecret) }, timeout).Should(Succeed())
+					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, setupConfigMap) }, timeout).Should(Succeed())
 				})
 			})
 
@@ -342,34 +398,6 @@ var _ = Describe("jenkins instance controller", func() {
 					Expect(c.Delete(context.TODO(), service)).To(Succeed())
 					Eventually(requests, timeout).Should(Receive(Equal(expectedRequest)))
 					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, service) }, timeout).Should(Succeed())
-				})
-			})
-
-			Context("Ingress", func() {
-				ingress := &v1beta1.Ingress{}
-				When("creating", func() {
-					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, ingress) }, timeout).
-						Should(Succeed())
-				})
-
-				When("deleting", func() {
-					Expect(c.Delete(context.TODO(), ingress)).To(Succeed())
-					Eventually(requests, timeout).Should(Receive(Equal(expectedRequest)))
-					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, ingress) }, timeout).Should(Succeed())
-				})
-			})
-
-			Context("NetworkPolicy", func() {
-				policy := &netv1.NetworkPolicy{}
-				When("creating", func() {
-					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, policy) }, timeout).
-						Should(Succeed())
-				})
-
-				When("deleting", func() {
-					Expect(c.Delete(context.TODO(), policy)).To(Succeed())
-					Eventually(requests, timeout).Should(Receive(Equal(expectedRequest)))
-					Eventually(func() error { return c.Get(context.TODO(), standardObjectkey, policy) }, timeout).Should(Succeed())
 				})
 			})
 
@@ -402,15 +430,15 @@ var _ = Describe("jenkins instance controller", func() {
 			})
 		})
 
-		It("changes to pre-existing secret with created secret", func() {
-			preExistingSecret := &corev1.Secret{}
+		It("changes to pre-existing configmap", func() {
+			configMap := &corev1.ConfigMap{}
 			Eventually(func() error {
-				return c.Get(context.TODO(), types.NamespacedName{Name: secret, Namespace: namespace}, preExistingSecret)
+				return c.Get(context.TODO(), types.NamespacedName{Name: cascConfigN, Namespace: namespace}, configMap)
 			}, timeout).Should(Succeed())
 
-			secretCopy := preExistingSecret.DeepCopy()
-			secretCopy.Data["user"] = []byte("dummy")
-			Expect(c.Update(context.TODO(), secretCopy)).To(Succeed())
+			mapCopy := configMap.DeepCopy()
+			mapCopy.Data["jenkins.yaml"] = cascConfigC2
+			Expect(c.Update(context.TODO(), mapCopy)).To(Succeed())
 			Eventually(requests, timeout).Should(Receive(Equal(expectedRequest)))
 		})
 	})

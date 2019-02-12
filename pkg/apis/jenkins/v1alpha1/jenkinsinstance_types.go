@@ -21,23 +21,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type PluginSpec struct {
-	// plugin Id
-	Id string `json:"id,omitempty"`
-	// plugin version string (or download url)
-	Version string `json:"version,omitempty"`
-	// config stored as multiline string of jenkins-configuration-as-code
-	Config string `json:"config,omitempty"`
-}
+type CascConfigSpec struct {
+	// casc config as multi-line yaml string
+	ConfigString string `json:"configstring,omitempty"`
 
-type CascSecretSpec struct {
-	// name of a kubernetes secret to be mounted into /secrets/jenkins
-	Secret string `json:"secret"`
-}
-
-type GroovySecretSpec struct {
-	// name of a kubernetes secret to be mounted into /var/jenkins/init.groovy.d
-	Secret string `json:"secret"`
+	// or casc config(s) mounted from a named config map
+	ConfigMap string `json:"configmap,omitempty"`
 }
 
 type ServiceSpec struct {
@@ -88,43 +77,25 @@ type JenkinsInstanceSpec struct {
 	// Dictionary of environment variable values
 	Env map[string]string `json:"env,omitempty"`
 
-	// Array of plugin configurations
-	Plugins []PluginSpec `json:"plugins,omitempty"`
+	// configuration-as-code spec
+	CascConfig *CascConfigSpec `json:"cascconfig,omitempty"`
 
-	// Config stored as multiline string of jenkins-configuration-as-code
-	Credentials string `json:"credentials,omitempty"`
+	// configuration-as-code secret name
+	CascSecret string `json:"cascsecret,omitempty"`
 
-	// Array of configuration-as-code secret names
-	CascSecrets []CascSecretSpec `json:"cascsecrets,omitempty"`
-
-	// Array of groovy configuration secret names
-	GroovySecrets []GroovySecretSpec `json:"groovysecrets,omitempty"`
+	// groovy configuration secret name
+	GroovySecret string `json:"groovysecret,omitempty"`
 
 	// Jenkins deployment annotations
 	Annotations map[string]string `json:"annotations,omitempty"`
 
-	// How many executors
-	Executors int32 `json:"executors,omitempty"`
-
 	AdminSecret string `json:"adminsecret,omitempty"`
-
-	// Jenkins location
-	Location string `json:"location,omitempty"`
-
-	// Jenkins admin email
-	AdminEmail string `json:"adminemail,omitempty"`
 
 	// Jenkins service options
 	Service *ServiceSpec `json:"service,omitempty"`
 
-	// Jenkins ingress options
-	Ingress *IngressSpec `json:"ingress,omitempty"`
-
 	// Service account name for jenkins to run under
 	ServiceAccount string `json:"serviceaccount,omitempty"`
-
-	// Create a network policy
-	NetworkPolicy bool `json:"networkpolicy,omitempty"`
 
 	// Jenkins storage options
 	Storage *StorageSpec `json:"storage,omitempty"`
@@ -144,7 +115,7 @@ type JenkinsInstanceStatus struct {
 
 // JenkinsInstance
 // +k8s:openapi-gen=true
-// +kubebuilder:resource:path=jenkinsinstances
+// +kubebuilder:subresource:status
 type JenkinsInstance struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
