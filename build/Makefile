@@ -61,12 +61,18 @@ run: manifests bin-data generate fmt vet
 manifests:
 	go run $(PROJECTDIR)/vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go crd --output-dir $(PROJECTDIR)/crd
 	go run $(PROJECTDIR)/vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go rbac --name rbac --output-dir $(PROJECTDIR)/rbac
+	mkdir -p $(PROJECTDIR)/build/kustomize/crd/protected/instances/base
+	mkdir -p $(PROJECTDIR)/build/kustomize/crd/unprotected/instances/base
+	mkdir -p $(PROJECTDIR)/build/kustomize/rbac/role/base
+	mkdir -p $(PROJECTDIR)/build/kustomize/rbac/rolebinding/base
+	cp -rf $(PROJECTDIR)/rbac/rbac_role.yaml $(PROJECTDIR)/build/kustomize/rbac/role/base
+	cp -rf $(PROJECTDIR)/rbac/rbac_role_binding.yaml $(PROJECTDIR)/build/kustomize/rbac/rolebinding/base
+	cp -rf $(PROJECTDIR)/crd/jenkins_v1alpha1_jenkinsinstance.yaml $(PROJECTDIR)/build/kustomize/crd/unprotected/instances/base
+	cp -rf $(PROJECTDIR)/crd/jenkins_v1alpha1_jenkinsinstance.yaml $(PROJECTDIR)/build/kustomize/crd/protected/instances/base
 	output=$$(kustomize build build/kustomize/rbac/role); echo "$$output" > $(PROJECTDIR)/deployments/helm/jenkins-operator/RBAC/rbac_role.yaml
 	output=$$(kustomize build build/kustomize/rbac/rolebinding); echo "$$output" > $(PROJECTDIR)/deployments/helm/jenkins-operator/RBAC/rbac_role_binding.yaml
 	output=$$(kustomize build build/kustomize/crd/protected/instances); echo "$$output" > $(PROJECTDIR)/deployments/helm/jenkins-operator/CRD-protected/jenkins_v1alpha1_jenkinsinstance.yaml
-	output=$$(kustomize build build/kustomize/crd/protected/jobs); echo "$$output" > $(PROJECTDIR)/deployments/helm/jenkins-operator/CRD-protected/jenkins_v1alpha1_jenkinsjob.yaml
 	output=$$(kustomize build build/kustomize/crd/unprotected/instances); echo "$$output" > $(PROJECTDIR)/deployments/helm/jenkins-operator/CRD/jenkins_v1alpha1_jenkinsinstance.yaml
-	output=$$(kustomize build build/kustomize/crd/unprotected/jobs); echo "$$output" > $(PROJECTDIR)/deployments/helm/jenkins-operator/CRD/jenkins_v1alpha1_jenkinsjob.yaml
 
 # label hack for helm templates
 

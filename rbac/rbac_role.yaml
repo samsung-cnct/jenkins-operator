@@ -55,6 +55,18 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
   - secrets
   verbs:
   - get
@@ -83,18 +95,6 @@ rules:
   verbs:
   - list
 - apiGroups:
-  - extensions
-  resources:
-  - ingresses
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
   - ""
   resources:
   - serviceaccounts
@@ -107,45 +107,9 @@ rules:
   - patch
   - delete
 - apiGroups:
-  - networking.k8s.io
-  resources:
-  - networkpolicies
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
   - jenkins.jenkinsoperator.maratoid.github.com
   resources:
   - jenkinsinstances
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - jenkins.jenkinsoperator.maratoid.github.com
-  resources:
-  - jenkinsjobs
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - ""
-  resources:
-  - secrets
   verbs:
   - get
   - list

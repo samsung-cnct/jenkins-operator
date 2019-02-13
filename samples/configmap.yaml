@@ -1,0 +1,98 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jenkins-config
+data:
+  jenkins: |
+    jobs:
+      - script: >
+           pipelineJob('casc-job') {
+             definition {
+               cps {
+                 script("""\
+                   pipeline {
+                     agent any
+                     stages {
+                       stage ('test') {
+                         steps {
+                           echo "hello"
+                         }
+                       }
+                     }
+                   }""".stripIndent())
+               }
+             }
+           }
+    jenkins:
+      agentProtocols:
+        - "JNLP4-connect"
+        - "Ping"
+      authorizationStrategy:
+        loggedInUsersCanDoAnything:
+          allowAnonymousRead: false
+      crumbIssuer:
+        standard:
+          excludeClientIPFromCrumb: false
+      disableRememberMe: false
+      mode: NORMAL
+      numExecutors: 1
+      primaryView:
+        all:
+          name: "all"
+      quietPeriod: 5
+      scmCheckoutRetryCount: 3
+      securityRealm:
+        local:
+          allowsSignup: false
+          enableCaptcha: false
+          users:
+            - id: ${JENKINS_ADMIN_USER}
+              password: ${JENKINS_ADMIN_PASSWORD}
+      slaveAgentPort: 50000
+      systemMessage: "jenkins-operator managed Jenkins instance\n\n"
+      clouds:
+        - kubernetes:
+            name: "casc-k8s-config"
+            serverUrl: "https://kubernetes.default.svc.cluster.local"
+            skipTlsVerify: true
+            namespace: "default"
+            credentialsId: "casc-k8s-config-credentials"
+            jenkinsUrl: "http://jenkins:8080"
+            jenkinsTunnel: "jenkins:50000"
+            connectTimeout: 0
+            readTimeout: 0
+            containerCapStr: 10000
+            maxRequestsPerHostStr: 64
+            retentionTimeout: 5
+    security:
+      remotingCLI:
+        enabled: false
+    unclassified:
+      location:
+        adminAddress: admin@cnct.team
+        url: https://jenkins.cnct.team
+    tool:
+      git:
+        installations:
+          - home: "git"
+            name: "Default"
+      jdk:
+        defaultProperties:
+          - installSource:
+              installers:
+                - jdkInstaller:
+                    acceptLicense: false
+    credentials:
+      system:
+        domainCredentials:
+        - credentials:
+              - fileSystemServiceAccountCredential:
+                  description: "File system service acount credential from CASC plugin"
+                  id: "casc-k8s-config-credentials"
+                  scope: GLOBAL
+              - usernamePassword:
+                  scope:    GLOBAL
+                  id:       casc-username-password
+                  username: root
+                  password: ${SUDO_PASSWORD}
+

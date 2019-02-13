@@ -18,7 +18,6 @@ package jenkinsinstance
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"fmt"
 	"github.com/golang/glog"
@@ -28,8 +27,6 @@ import (
 	"github.com/spf13/viper"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/api/extensions/v1beta1"
-	netv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -45,9 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"sort"
 	"strings"
-	"text/template"
 )
 
 const (
@@ -143,30 +138,12 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// Watch an Ingress created by JenkinsInstance
-	err = c.Watch(&source.Kind{Type: &v1beta1.Ingress{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &jenkinsv1alpha1.JenkinsInstance{},
-	}, watchPredicate)
-	if err != nil {
-		return err
-	}
-
-	// Watch a Networkpolicy created by JenkinsInstance
-	err = c.Watch(&source.Kind{Type: &netv1.NetworkPolicy{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &jenkinsv1alpha1.JenkinsInstance{},
-	}, watchPredicate)
-	if err != nil {
-		return err
-	}
-
-	// Watch Secret resources not owned by the JenkinsInstance change
-	// This is needed for re-loading login information from the pre-provided secret
-	// When admin login secret changes, Watch will list all JenkinsInstances
-	// and re-enqueue the keys for the ones that refer to that admin login secret via their spec.
+	// Watch ConfigMap resources not owned by the JenkinsInstance change
+	// This is needed for re-loading jenkins configuration
+	// When configuration config map changes, Watch will list all JenkinsInstances
+	// and re-enqueue the keys for the ones that refer to the configuration config map via their spec.
 	err = c.Watch(
-		&source.Kind{Type: &corev1.Secret{}},
+		&source.Kind{Type: &corev1.ConfigMap{}},
 		&handler.EnqueueRequestsFromMapFunc{
 			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
 
@@ -182,18 +159,13 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 
 				var keys []reconcile.Request
 				for _, inst := range jenkinsInstances.Items {
-					if inst.Spec.AdminSecret == a.Meta.GetName() {
+					if inst.Spec.CascConfig.ConfigMap == a.Meta.GetName() {
 						keys = append(keys, reconcile.Request{
-							NamespacedName: types.NewNamespacedNameFromString(
-								fmt.Sprintf("%s%c%s", inst.GetNamespace(), types.Separator, inst.GetName())),
+							NamespacedName: types.NamespacedName{
+								Name:      inst.GetName(),
+								Namespace: inst.GetNamespace(),
+							},
 						})
-					} else if inst.Spec.PluginConfig != nil {
-						if inst.Spec.PluginConfig.ConfigSecret == a.Meta.GetName() {
-							keys = append(keys, reconcile.Request{
-								NamespacedName: types.NewNamespacedNameFromString(
-									fmt.Sprintf("%s%c%s", inst.GetNamespace(), types.Separator, inst.GetName())),
-							})
-						}
 					}
 				}
 
@@ -228,16 +200,16 @@ func (bc *ReconcileJenkinsInstance) getJenkinsInstance(name types.NamespacedName
 	return jenkinsInstance, err
 }
 
-func (bc *ReconcileJenkinsInstance) getSetupSecret(instanceName types.NamespacedName) (*corev1.Secret, error) {
-	setupSecret := &corev1.Secret{}
-	err := bc.Client.Get(context.TODO(), instanceName, setupSecret)
-	return setupSecret, err
+func (bc *ReconcileJenkinsInstance) getSetupConfigMap(instanceName types.NamespacedName) (*corev1.ConfigMap, error) {
+	setupConfigMap := &corev1.ConfigMap{}
+	err := bc.Client.Get(context.TODO(), instanceName, setupConfigMap)
+	return setupConfigMap, err
 }
 
 func (bc *ReconcileJenkinsInstance) getAdminSecret(instanceName types.NamespacedName) (*corev1.Secret, error) {
 	jenkinsInstance, err := bc.getJenkinsInstance(instanceName)
 	if err != nil {
-		return nil, fmt.Errorf("Could not get Jenkins instance %s: %v", instanceName.String(), err)
+		return nil, fmt.Errorf("could not get Jenkins instance %s: %v", instanceName.String(), err)
 	}
 
 	adminSecret := &corev1.Secret{}
@@ -251,7 +223,7 @@ func (bc *ReconcileJenkinsInstance) getAdminSecret(instanceName types.Namespaced
 func (bc *ReconcileJenkinsInstance) getService(instanceName types.NamespacedName) (*corev1.Service, error) {
 	jenkinsInstance, err := bc.getJenkinsInstance(instanceName)
 	if err != nil {
-		return nil, fmt.Errorf("Could not get Jenkins instance %s: %v", instanceName.String(), err)
+		return nil, fmt.Errorf("could not get Jenkins instance %s: %v", instanceName.String(), err)
 	}
 
 	serviceName := jenkinsInstance.GetName()
@@ -266,26 +238,6 @@ func (bc *ReconcileJenkinsInstance) getService(instanceName types.NamespacedName
 		service)
 
 	return service, err
-}
-
-func (bc *ReconcileJenkinsInstance) getIngress(instanceName types.NamespacedName) (*v1beta1.Ingress, error) {
-	ingress := &v1beta1.Ingress{}
-	err := bc.Client.Get(
-		context.TODO(),
-		instanceName,
-		ingress)
-
-	return ingress, err
-}
-
-func (bc *ReconcileJenkinsInstance) getNetworkPolicy(instanceName types.NamespacedName) (*netv1.NetworkPolicy, error) {
-	policy := &netv1.NetworkPolicy{}
-	err := bc.Client.Get(
-		context.TODO(),
-		instanceName,
-		policy)
-
-	return policy, err
 }
 
 func (bc *ReconcileJenkinsInstance) getDeployment(instanceName types.NamespacedName) (*appsv1.Deployment, error) {
@@ -305,12 +257,11 @@ func (bc *ReconcileJenkinsInstance) getDeployment(instanceName types.NamespacedN
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=nodes,verbs=list
-// +kubebuilder:rbac:groups=extensions,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=jenkins.jenkinsoperator.maratoid.github.com,resources=jenkinsinstances,verbs=get;list;watch;create;update;patch;delete
 func (bc *ReconcileJenkinsInstance) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	jenkinsInstance, err := bc.getJenkinsInstance(request.NamespacedName)
@@ -330,8 +281,7 @@ func (bc *ReconcileJenkinsInstance) Reconcile(request reconcile.Request) (reconc
 		glog.Errorf("%s: AdminSecret name must be specified", request.String())
 		return reconcile.Result{}, nil
 	}
-	adminSecretKey := types.NewNamespacedNameFromString(
-		fmt.Sprintf("%s%c%s", request.Namespace, types.Separator, adminSecretName))
+	adminSecretKey := types.NamespacedName{Namespace: request.Namespace, Name: adminSecretName}
 
 	adminSecret := &corev1.Secret{}
 	err = bc.Client.Get(context.TODO(), adminSecretKey, adminSecret)
@@ -341,12 +291,12 @@ func (bc *ReconcileJenkinsInstance) Reconcile(request reconcile.Request) (reconc
 	}
 
 	// Get the setup utility secret managed by this controller
-	_, err = bc.newSetupSecret(request.NamespacedName)
+	_, err = bc.newSetupConfigMap(request.NamespacedName)
 	// If an error occurs during Get/Create, we'll requeue the item so we can
 	// attempt processing again later. This could have been caused by a
 	// temporary network failure, or any other transient reason.
 	if err != nil {
-		glog.Errorf("Error creating setup secret: %s", err)
+		glog.Errorf("Error creating setup config map: %s", err)
 		return reconcile.Result{}, err
 	}
 
@@ -368,26 +318,6 @@ func (bc *ReconcileJenkinsInstance) Reconcile(request reconcile.Request) (reconc
 		return reconcile.Result{}, err
 	}
 
-	// Get the ingress with the name specified in JenkinsInstance.spec
-	_, err = bc.newIngress(request.NamespacedName)
-	// If an error occurs during Get/Create, we'll requeue the item so we can
-	// attempt processing again later. This could have been caused by a
-	// temporary network failure, or any other transient reason.
-	if err != nil {
-		glog.Errorf("Error creating ingress: %s", err)
-		return reconcile.Result{}, err
-	}
-
-	// Setup Network policy if specified in JenkinsInstance.spec
-	_, err = bc.newNetworkPolicy(request.NamespacedName)
-	// If an error occurs during Get/Create, we'll requeue the item so we can
-	// attempt processing again later. This could have been caused by a
-	// temporary network failure, or any other transient reason.
-	if err != nil {
-		glog.Errorf("Error creating network policy: %s", err)
-		return reconcile.Result{}, err
-	}
-
 	// Finally, we update the status block of the JenkinsInstance resource to reflect the
 	// current state of the world
 	err = bc.updateJenkinsInstanceStatus(request.NamespacedName)
@@ -403,48 +333,14 @@ func (bc *ReconcileJenkinsInstance) Reconcile(request reconcile.Request) (reconc
 // updateJenkinsInstanceStatus updates status fields of the jenkins instance object and emits events
 func (bc *ReconcileJenkinsInstance) updateJenkinsInstanceStatus(instanceName types.NamespacedName) error {
 
-	setupSecret, err := bc.getSetupSecret(instanceName)
-	if err != nil {
-		return err
-	}
-
-	adminSecret, err := bc.getAdminSecret(instanceName)
-	if err != nil {
-		return err
-	}
-
 	service, err := bc.getService(instanceName)
 	if err != nil {
 		return err
 	}
 
-	apiToken := string(setupSecret.Data["apiToken"][:])
-	apiTokenUuid := string(setupSecret.Data["apiTokenUuid"][:])
-	valid, err := util.JenkinsApiTokenValid(service, adminSecret, setupSecret, JenkinsMasterPort)
+	err = util.CheckJenkinsReady(service, JenkinsMasterPort)
 	if err != nil {
 		return err
-	}
-
-	if !valid {
-		err = util.RevokeJenkinsApiToken(service, adminSecret, setupSecret, JenkinsMasterPort)
-		if err != nil {
-			glog.Warningf("Error revoking jenkins api token: %v", err)
-		}
-		apiToken, apiTokenUuid, err = util.GetJenkinsApiToken(service, adminSecret, JenkinsMasterPort)
-		if err != nil {
-			return err
-		}
-	}
-
-	if (string(setupSecret.Data["apiToken"][:]) != apiToken) ||
-		(string(setupSecret.Data["apiTokenUuid"][:]) != apiTokenUuid) {
-		setupSecretCopy := setupSecret.DeepCopy()
-		setupSecretCopy.Data["apiToken"] = []byte(apiToken)
-		setupSecretCopy.Data["apiTokenUuid"] = []byte(apiTokenUuid)
-		err = bc.Client.Update(context.TODO(), setupSecretCopy)
-		if err != nil {
-			return err
-		}
 	}
 
 	jenkinsInstance, err := bc.getJenkinsInstance(instanceName)
@@ -452,15 +348,11 @@ func (bc *ReconcileJenkinsInstance) updateJenkinsInstanceStatus(instanceName typ
 		return err
 	}
 
-	doUpdate := (jenkinsInstance.Status.Phase != JenkinsInstancePhaseReady) ||
-		(jenkinsInstance.Status.SetupSecret != setupSecret.GetName())
+	doUpdate := jenkinsInstance.Status.Phase != JenkinsInstancePhaseReady
 
 	if doUpdate {
-		jenkinsInstanceCopy := jenkinsInstance.DeepCopy()
-		jenkinsInstanceCopy.Status.Phase = JenkinsInstancePhaseReady
-		jenkinsInstanceCopy.Status.SetupSecret = setupSecret.GetName()
-
-		err = bc.Client.Update(context.TODO(), jenkinsInstanceCopy)
+		jenkinsInstance.Status.Phase = JenkinsInstancePhaseReady
+		err = bc.Status().Update(context.Background(), jenkinsInstance)
 		if err != nil {
 			return err
 		}
@@ -469,29 +361,29 @@ func (bc *ReconcileJenkinsInstance) updateJenkinsInstanceStatus(instanceName typ
 	return nil
 }
 
-// newSetupSecret creates an admin password secret for a JenkinsInstance resource. It also sets
+// newSetupConfigMap creates an admin password ConfigMap for a JenkinsInstance resource. It also sets
 // the appropriate OwnerReferences on the resource so handleObject can discover
 // the JenkinsInstance resource that 'owns' it.
-func (bc *ReconcileJenkinsInstance) newSetupSecret(instanceName types.NamespacedName) (*corev1.Secret, error) {
+func (bc *ReconcileJenkinsInstance) newSetupConfigMap(instanceName types.NamespacedName) (*corev1.ConfigMap, error) {
 	exists := false
 	jenkinsInstance, err := bc.getJenkinsInstance(instanceName)
 	if err != nil {
 		return nil, err
 	}
 
-	setupSecret, err := bc.getSetupSecret(instanceName)
+	setupConfigMap, err := bc.getSetupConfigMap(instanceName)
 	// If the resource doesn't exist, we'll create it
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return nil, err
 		}
 	} else {
-		// If the Secret is not controlled by this JenkinsInstance resource, we should log
+		// If the ConfigMap is not controlled by this JenkinsInstance resource, we should log
 		// a warning to the event recorder and return
-		if !metav1.IsControlledBy(setupSecret, jenkinsInstance) {
-			msg := fmt.Sprintf(MessageResourceExists, setupSecret.GetName())
+		if !metav1.IsControlledBy(setupConfigMap, jenkinsInstance) {
+			msg := fmt.Sprintf(MessageResourceExists, setupConfigMap.GetName())
 			bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
-			return setupSecret, fmt.Errorf(msg)
+			return setupConfigMap, fmt.Errorf(msg)
 		}
 
 		exists = true
@@ -503,170 +395,99 @@ func (bc *ReconcileJenkinsInstance) newSetupSecret(instanceName types.Namespaced
 		"component":  string(jenkinsInstance.UID),
 	}
 
-	adminUserConfig, err := configdata.Asset("init-groovy/0-jenkins-config.groovy")
+	// load required plugins
+	requiredPlugins, err := configdata.Asset("environment/required-plugins")
 	if err != nil {
 		return nil, err
 	}
 
-	type JenkinsInfo struct {
-		User       string
-		Password   string
-		Url        string
-		AdminEmail string
-		AgentPort  int32
-		Executors  int32
-	}
-
-	adminSecret, err := bc.getAdminSecret(instanceName)
-	if err != nil {
-		return nil, err
-	}
-
-	// decode Admin secret strings
-	adminUser := string(adminSecret.Data["user"][:])
-	adminPassword := string(adminSecret.Data["pass"][:])
-	if err != nil {
-		return nil, err
-	}
-
-	jenkinsInfo := JenkinsInfo{
-		User:       string(adminUser[:]),
-		Password:   string(adminPassword[:]),
-		Url:        jenkinsInstance.Spec.Location,
-		AdminEmail: jenkinsInstance.Spec.AdminEmail,
-		AgentPort:  JenkinsAgentPort,
-		Executors:  jenkinsInstance.Spec.Executors,
-	}
-
-	// parse the plugin array
-	requiredPlugin, err := configdata.Asset("environment/required-plugins")
-	if err != nil {
-		return nil, err
-	}
-	plugins := jenkinsInstance.Spec.Plugins
 	var pluginList []string
 
 	// add required plugins first
-	scanner := bufio.NewScanner(strings.NewReader(string(requiredPlugin[:])))
+	scanner := bufio.NewScanner(strings.NewReader(string(requiredPlugins[:])))
 	for scanner.Scan() {
 		pluginList = append(pluginList, scanner.Text())
 	}
 
-	// add user plugins next
-	for _, plugin := range plugins {
-		pluginInfo := fmt.Sprintf("%s:%s", plugin.Id, plugin.Version)
-		pluginList = append(pluginList, pluginInfo)
-	}
+	if jenkinsInstance.Spec.Plugins != nil {
+		for _, plugin := range jenkinsInstance.Spec.Plugins {
+			isAlreadyRequired := false
+			for _, addedPlugin := range pluginList {
+				components := strings.Split(addedPlugin, ":")
+				if strings.EqualFold(components[0], plugin.Id) {
+					isAlreadyRequired = true
+					break
+				}
+			}
 
-	// TODO: remove duplicate plugin ids
-
-	// parse the groovy config template
-	configTemplate, err := template.New("jenkins-config").Parse(string(adminUserConfig[:]))
-	if err != nil {
-		return nil, err
-	}
-
-	var jenkinsConfigParsed bytes.Buffer
-	if err := configTemplate.Execute(&jenkinsConfigParsed, jenkinsInfo); err != nil {
-		return nil, err
-	}
-
-	// load seed job dsl from bindata
-	seedDsl, err := configdata.Asset("jobdsl/seed-job-dsl")
-	if err != nil {
-		return nil, err
+			if !isAlreadyRequired {
+				pluginInfo := fmt.Sprintf("%s:%s", plugin.Id, plugin.Version)
+				pluginList = append(pluginList, pluginInfo)
+			}
+		}
 	}
 
 	// add things to the string data
-	byteData := map[string][]byte{
-		"0-jenkins-config.groovy": []byte(jenkinsConfigParsed.String()),
-		"plugins.txt":             []byte(strings.Join(pluginList, "\n")),
-		"seed-job-dsl":            []byte(string(seedDsl[:])),
-		"user":                    []byte(adminUser),
+	stringData := map[string]string{
+		"plugins.txt": strings.Join(pluginList, "\n"),
 	}
-
-	if jenkinsInstance.Spec.PluginConfig != nil {
-		if jenkinsInstance.Spec.PluginConfig.Config != "" {
-			byteData["1-user-config.groovy"] = []byte(jenkinsInstance.Spec.PluginConfig.Config)
-		}
-
-		if jenkinsInstance.Spec.PluginConfig.ConfigSecret != "" {
-			configSecret := &corev1.Secret{}
-			err = bc.Client.Get(
-				context.TODO(), types.NewNamespacedNameFromString(
-					fmt.Sprintf("%s%c%s", jenkinsInstance.GetNamespace(), types.Separator,
-						jenkinsInstance.Spec.PluginConfig.ConfigSecret)),
-				configSecret)
-			if err != nil {
-				glog.Errorf("Failed to load plugin config secret %s: %s",
-					jenkinsInstance.Spec.PluginConfig.ConfigSecret, err)
-				return nil, err
-			}
-
-			// add values from config secret to our setup secret in
-			// lexical order
-			keys := make([]string, 0)
-			for k, _ := range configSecret.Data {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-
-			for _, keyVal := range keys {
-				key := fmt.Sprintf("2-user-config-%s.groovy", keyVal)
-				byteData[key] = configSecret.Data[keyVal]
-			}
-		}
+	if jenkinsInstance.Spec.CascConfig.ConfigString != "" {
+		stringData["jenkins.yaml"] = jenkinsInstance.Spec.CascConfig.ConfigString
 	}
 
 	if exists {
-		setupSecretCopy := setupSecret.DeepCopy()
-		setupSecretCopy.Data = util.MergeSecretData(byteData, setupSecret.Data)
-		setupSecretCopy.Labels = labels
+		setupConfigMapCopy := setupConfigMap.DeepCopy()
+		setupConfigMapCopy.Data = util.MergeData(stringData, setupConfigMap.Data)
+		setupConfigMapCopy.Labels = labels
 
-		if reflect.DeepEqual(setupSecretCopy.Data, setupSecret.Data) {
-			return setupSecret, nil
+		if reflect.DeepEqual(setupConfigMapCopy.Data, setupConfigMap.Data) {
+			return setupConfigMap, nil
 		}
 
 		glog.Info("updating secret")
-		err = bc.Client.Update(context.TODO(), setupSecretCopy)
+		err = bc.Client.Update(context.TODO(), setupConfigMapCopy)
 		if err != nil {
-			return setupSecretCopy, err
+			return setupConfigMapCopy, err
 		}
 
 		// safe restart jenkins
 		service, err := bc.getService(instanceName)
 		if err != nil {
-			return setupSecretCopy, err
+			return setupConfigMapCopy, err
 		}
 
-		err = util.SafeRestartJenkins(service, setupSecretCopy, JenkinsMasterPort)
+		adminSecret, err := bc.getAdminSecret(instanceName)
 		if err != nil {
-			return setupSecretCopy, err
+			return nil, err
+		}
+
+		err = util.SafeRestartJenkins(service, adminSecret, JenkinsMasterPort)
+		if err != nil {
+			return setupConfigMapCopy, err
 		}
 
 		if err != nil {
-			glog.Errorf("failed to restart jenkins instance %s after setup secret %s was updated",
-				jenkinsInstance.GetName(), setupSecret.GetName())
+			glog.Errorf("failed to restart jenkins instance %s after setup configmap %s was updated",
+				jenkinsInstance.GetName(), setupConfigMap.GetName())
 		}
-		return setupSecretCopy, err
+		return setupConfigMapCopy, err
 	} else {
-		setupSecret = &corev1.Secret{
+		setupConfigMap = &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      jenkinsInstance.GetName(),
 				Namespace: jenkinsInstance.GetNamespace(),
 				Labels:    labels,
 			},
-			Data: byteData,
-			Type: corev1.SecretTypeOpaque,
+			Data: stringData,
 		}
 
-		err = controllerutil.SetControllerReference(jenkinsInstance, setupSecret, bc.scheme)
+		err = controllerutil.SetControllerReference(jenkinsInstance, setupConfigMap, bc.scheme)
 		if err != nil {
 			return nil, err
 		}
 
-		err = bc.Client.Create(context.TODO(), setupSecret)
-		return setupSecret, err
+		err = bc.Client.Create(context.TODO(), setupConfigMap)
+		return setupConfigMap, err
 	}
 }
 
@@ -808,284 +629,6 @@ func (bc *ReconcileJenkinsInstance) newService(instanceName types.NamespacedName
 	}
 }
 
-// newIngress creates a new Ingress for a JenkinsInstance resource. It also sets
-// the appropriate OwnerReferences on the resource so handleObject can discover
-// the JenkinsInstance resource that 'owns' it.
-func (bc *ReconcileJenkinsInstance) newIngress(instanceName types.NamespacedName) (*v1beta1.Ingress, error) {
-	exists := false
-
-	jenkinsInstance, err := bc.getJenkinsInstance(instanceName)
-	if err != nil {
-		return nil, err
-	}
-
-	if jenkinsInstance.Spec.Ingress == nil {
-		return nil, nil
-	}
-
-	ingress, err := bc.getIngress(instanceName)
-
-	// If the ingress doesn't exist, we'll create it
-	if err != nil {
-		if !errors.IsNotFound(err) {
-			return nil, err
-		}
-	} else {
-		// If the Ingress is not controlled by this JenkinsInstance resource, we should log
-		// a warning to the event recorder and ret
-		if !metav1.IsControlledBy(ingress, jenkinsInstance) {
-			msg := fmt.Sprintf(MessageResourceExists, ingress.GetName())
-			bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
-			return ingress, fmt.Errorf(msg)
-		}
-
-		exists = true
-	}
-
-	labels := map[string]string{
-		"app":        "jenkinsci",
-		"controller": jenkinsInstance.GetName(),
-		"component":  string(jenkinsInstance.UID),
-	}
-
-	serviceName := jenkinsInstance.GetName()
-	if jenkinsInstance.Spec.Service != nil && jenkinsInstance.Spec.Service.Name != "" {
-		serviceName = jenkinsInstance.Spec.Service.Name
-	}
-	if jenkinsInstance.Spec.Ingress.Service != "" {
-		serviceName = jenkinsInstance.Spec.Ingress.Service
-	}
-
-	ingressPath := jenkinsInstance.Spec.Ingress.Path
-	if ingressPath == "" {
-		ingressPath = "/"
-	}
-
-	if exists {
-		ingressCopy := ingress.DeepCopy()
-		ingressCopy.Labels = labels
-		ingressCopy.Spec.TLS = []v1beta1.IngressTLS{
-			{
-				SecretName: jenkinsInstance.Spec.Ingress.TlsSecret,
-				Hosts: []string{
-					util.GetJenkinsLocationHost(jenkinsInstance),
-				},
-			},
-		}
-		ingressCopy.Spec.Rules = []v1beta1.IngressRule{
-			{
-				Host: util.GetJenkinsLocationHost(jenkinsInstance),
-				IngressRuleValue: v1beta1.IngressRuleValue{
-					HTTP: &v1beta1.HTTPIngressRuleValue{
-						Paths: []v1beta1.HTTPIngressPath{
-							{
-								Path: ingressPath,
-								Backend: v1beta1.IngressBackend{
-									ServiceName: serviceName,
-									ServicePort: intstr.IntOrString{
-										Type:   intstr.Int,
-										IntVal: JenkinsMasterPort,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		}
-
-		if reflect.DeepEqual(ingressCopy.Spec, ingress.Spec) {
-			return ingress, nil
-		}
-
-		glog.Info("updating ingress")
-		err = bc.Client.Update(context.TODO(), ingressCopy)
-		return ingress, err
-
-	} else {
-
-		ingress = &v1beta1.Ingress{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:        jenkinsInstance.GetName(),
-				Namespace:   jenkinsInstance.GetNamespace(),
-				Labels:      labels,
-				Annotations: jenkinsInstance.Spec.Ingress.Annotations,
-			},
-			Spec: v1beta1.IngressSpec{
-				TLS: []v1beta1.IngressTLS{
-					{
-						SecretName: jenkinsInstance.Spec.Ingress.TlsSecret,
-						Hosts: []string{
-							util.GetJenkinsLocationHost(jenkinsInstance),
-						},
-					},
-				},
-				Rules: []v1beta1.IngressRule{
-					{
-						Host: util.GetJenkinsLocationHost(jenkinsInstance),
-						IngressRuleValue: v1beta1.IngressRuleValue{
-							HTTP: &v1beta1.HTTPIngressRuleValue{
-								Paths: []v1beta1.HTTPIngressPath{
-									{
-										Path: ingressPath,
-										Backend: v1beta1.IngressBackend{
-											ServiceName: serviceName,
-											ServicePort: intstr.IntOrString{
-												Type:   intstr.Int,
-												IntVal: JenkinsMasterPort,
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		}
-
-		err = controllerutil.SetControllerReference(jenkinsInstance, ingress, bc.scheme)
-		if err != nil {
-			return nil, err
-		}
-
-		err = bc.Client.Create(context.TODO(), ingress)
-		return ingress, err
-	}
-}
-
-// newNetworkPolicy creates a NetworkPolicy (if needed) for a JenkinsInstance. It also sets
-// the appropriate OwnerReferences on the resources so handleObject can discover
-// the JenkinsInstance resource that 'owns' it.
-func (bc *ReconcileJenkinsInstance) newNetworkPolicy(instanceName types.NamespacedName) (*netv1.NetworkPolicy, error) {
-	exists := false
-
-	jenkinsInstance, err := bc.getJenkinsInstance(instanceName)
-	if err != nil {
-		return nil, err
-	}
-
-	if !jenkinsInstance.Spec.NetworkPolicy {
-		return nil, nil
-	}
-
-	policy, err := bc.getNetworkPolicy(instanceName)
-
-	// If the policy doesn't exist, we'll create it
-	if err != nil {
-		if !errors.IsNotFound(err) {
-			return nil, err
-		}
-	} else {
-		// If the role binding is not controlled by this JenkinsInstance resource, we should log
-		// a warning to the event recorder
-		if !metav1.IsControlledBy(policy, jenkinsInstance) {
-			msg := fmt.Sprintf(MessageResourceExists, policy.GetName())
-			bc.Event(jenkinsInstance, corev1.EventTypeWarning, ErrResourceExists, msg)
-			return policy, fmt.Errorf(msg)
-		}
-
-		exists = true
-	}
-
-	labels := map[string]string{
-		"app":        "jenkinsci",
-		"controller": jenkinsInstance.GetName(),
-		"component":  string(jenkinsInstance.UID),
-	}
-
-	if exists {
-		policyCopy := policy.DeepCopy()
-		policyCopy.Labels = labels
-		policyCopy.Spec.PodSelector = metav1.LabelSelector{
-			MatchLabels: labels,
-		}
-		policyCopy.Spec.Ingress = []netv1.NetworkPolicyIngressRule{
-			{
-				Ports: []netv1.NetworkPolicyPort{
-					{
-						Port: &intstr.IntOrString{
-							Type:   intstr.Int,
-							IntVal: JenkinsMasterPort,
-						},
-					},
-					{
-						Port: &intstr.IntOrString{
-							Type:   intstr.Int,
-							IntVal: JenkinsAgentPort,
-						},
-					},
-				},
-			},
-		}
-
-		if reflect.DeepEqual(policyCopy.Spec.PodSelector, policy.Spec.PodSelector) {
-			masterPortPresent := false
-			agentPortPresent := false
-			for _, policyRule := range policy.Spec.Ingress {
-				for _, port := range policyRule.Ports {
-					if port.Port.IntVal == JenkinsMasterPort {
-						masterPortPresent = true
-					}
-
-					if port.Port.IntVal == JenkinsAgentPort {
-						agentPortPresent = true
-					}
-				}
-			}
-
-			if agentPortPresent && masterPortPresent {
-				return policy, nil
-			}
-		}
-
-		glog.Info("updating policy")
-		err = bc.Client.Update(context.TODO(), policyCopy)
-		return policyCopy, err
-	} else {
-		policy = &netv1.NetworkPolicy{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      jenkinsInstance.GetName(),
-				Namespace: jenkinsInstance.GetNamespace(),
-				Labels:    labels,
-			},
-
-			Spec: netv1.NetworkPolicySpec{
-				PodSelector: metav1.LabelSelector{
-					MatchLabels: labels,
-				},
-				Ingress: []netv1.NetworkPolicyIngressRule{
-					{
-						Ports: []netv1.NetworkPolicyPort{
-							{
-								Port: &intstr.IntOrString{
-									Type:   intstr.Int,
-									IntVal: JenkinsMasterPort,
-								},
-							},
-							{
-								Port: &intstr.IntOrString{
-									Type:   intstr.Int,
-									IntVal: JenkinsAgentPort,
-								},
-							},
-						},
-					},
-				},
-			},
-		}
-
-		err = controllerutil.SetControllerReference(jenkinsInstance, policy, bc.scheme)
-		if err != nil {
-			glog.Error("Could not set controller reference on network policy %s", jenkinsInstance.GetName())
-			return nil, err
-		}
-
-		err = bc.Client.Create(context.TODO(), policy)
-		return policy, err
-	}
-}
-
 // newDeployment creates a new Deployment for a JenkinsInstance resource. It also sets
 // the appropriate OwnerReferences on the resource so handleObject can discover
 // the JenkinsInstance resource that 'owns' it.
@@ -1117,7 +660,7 @@ func (bc *ReconcileJenkinsInstance) newDeployment(instanceName types.NamespacedN
 		exists = true
 	}
 
-	labels := map[string]string{
+	useLabels := map[string]string{
 		"app":        "jenkinsci",
 		"controller": jenkinsInstance.GetName(),
 		"component":  string(jenkinsInstance.UID),
@@ -1143,6 +686,16 @@ func (bc *ReconcileJenkinsInstance) newDeployment(instanceName types.NamespacedN
 		})
 	}
 
+	// CASC variables
+	env = append(env, corev1.EnvVar{
+		Name:  "CASC_JENKINS_CONFIG",
+		Value: "/var/jenkins_home/casc_configs",
+	})
+	env = append(env, corev1.EnvVar{
+		Name:  "SECRETS",
+		Value: "/var/jenkins_home/casc_secrets",
+	})
+
 	// user-specified environment variables
 	for envVar, envVarVal := range jenkinsInstance.Spec.Env {
 		env = append(env, corev1.EnvVar{
@@ -1153,7 +706,7 @@ func (bc *ReconcileJenkinsInstance) newDeployment(instanceName types.NamespacedN
 
 	// build a command string to install plugins and launch jenkins
 	commandString := ""
-	commandString += "/usr/local/bin/install-plugins.sh $(cat /var/jenkins_home/init.groovy.d/plugins.txt | tr '\\n' ' ') && "
+	commandString += "/usr/local/bin/install-plugins.sh $(cat /var/jenkins_home/required_plugins/plugins.txt | tr '\\n' ' ') && "
 	commandString += "/sbin/tini -- /usr/local/bin/jenkins.sh"
 	commandString += ""
 
@@ -1215,13 +768,13 @@ func (bc *ReconcileJenkinsInstance) newDeployment(instanceName types.NamespacedN
 	}
 
 	// if PVC name is not specified, use an EmptyDir
-	var volumeSource corev1.VolumeSource
+	var jobVolumeSource corev1.VolumeSource
 	if jenkinsInstance.Spec.Storage == nil {
-		volumeSource = corev1.VolumeSource{
+		jobVolumeSource = corev1.VolumeSource{
 			EmptyDir: &corev1.EmptyDirVolumeSource{},
 		}
 	} else {
-		volumeSource = corev1.VolumeSource{
+		jobVolumeSource = corev1.VolumeSource{
 			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
 				ClaimName: pvcName,
 				ReadOnly:  false,
@@ -1232,12 +785,176 @@ func (bc *ReconcileJenkinsInstance) newDeployment(instanceName types.NamespacedN
 	var replicas int32 = JenkinsReplicas
 	var runAsUser int64 = 0
 
+	// setup volumes
+	deploymentVolumes := []corev1.Volume{
+		{
+			Name: "required-plugins",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: jenkinsInstance.Name,
+					},
+					Items: []corev1.KeyToPath{
+						{
+							Key:  "plugins.txt",
+							Path: "plugins.txt",
+						},
+					},
+				},
+			},
+		},
+		{
+			Name:         "job-storage",
+			VolumeSource: jobVolumeSource,
+		},
+	}
+
+	// add casc secrets
+	if jenkinsInstance.Spec.CascSecret != "" {
+		// check if exists
+		cascSecret := &corev1.Secret{}
+		err := bc.Client.Get(context.TODO(), types.NamespacedName{
+			Namespace: instanceName.Namespace,
+			Name:      jenkinsInstance.Spec.CascSecret,
+		}, cascSecret)
+		if err != nil {
+			return nil, err
+		}
+
+		deploymentVolumes = append(deploymentVolumes, corev1.Volume{
+			Name: "casc-secret",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: jenkinsInstance.Spec.CascSecret,
+				},
+			},
+		})
+	}
+	// add groovy secrets
+	if jenkinsInstance.Spec.GroovySecret != "" {
+		groovySecret := &corev1.Secret{}
+		err := bc.Client.Get(context.TODO(), types.NamespacedName{
+			Namespace: instanceName.Namespace,
+			Name:      jenkinsInstance.Spec.GroovySecret,
+		}, groovySecret)
+		if err != nil {
+			return nil, err
+		}
+
+		var items []corev1.KeyToPath
+		for groovySecretKeyName, _ := range groovySecret.Data {
+			items = append(items, corev1.KeyToPath{
+				Key:  groovySecretKeyName,
+				Path: groovySecretKeyName + ".groovy",
+			})
+		}
+
+		deploymentVolumes = append(deploymentVolumes, corev1.Volume{
+			Name: "groovy-secret",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: jenkinsInstance.Spec.GroovySecret,
+					Items:      items,
+				},
+			},
+		})
+	}
+
+	// add casc config from either setup config map or named config map
+	if jenkinsInstance.Spec.CascConfig != nil {
+		if jenkinsInstance.Spec.CascConfig.ConfigMap != "" {
+			// check if exists
+			cascConfig := &corev1.ConfigMap{}
+			err := bc.Client.Get(context.TODO(), types.NamespacedName{
+				Namespace: instanceName.Namespace,
+				Name:      jenkinsInstance.Spec.CascConfig.ConfigMap,
+			}, cascConfig)
+			if err != nil {
+				return nil, err
+			}
+
+			var items []corev1.KeyToPath
+			for cascConfigKeyName, _ := range cascConfig.Data {
+				items = append(items, corev1.KeyToPath{
+					Key:  cascConfigKeyName,
+					Path: cascConfigKeyName + ".yaml",
+				})
+			}
+
+			deploymentVolumes = append(deploymentVolumes, corev1.Volume{
+				Name: "casc-config",
+				VolumeSource: corev1.VolumeSource{
+					ConfigMap: &corev1.ConfigMapVolumeSource{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: jenkinsInstance.Spec.CascConfig.ConfigMap,
+						},
+						Items: items,
+					},
+				},
+			})
+		} else if jenkinsInstance.Spec.CascConfig.ConfigString != "" {
+			deploymentVolumes = append(deploymentVolumes, corev1.Volume{
+				Name: "casc-config",
+				VolumeSource: corev1.VolumeSource{
+					ConfigMap: &corev1.ConfigMapVolumeSource{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: jenkinsInstance.Name,
+						},
+						Items: []corev1.KeyToPath{
+							{
+								Key:  "jenkins.yaml",
+								Path: "jenkins.yaml",
+							},
+						},
+					},
+				},
+			})
+		} else {
+			return nil, fmt.Errorf("cascconfig must specify configstring or configmap")
+		}
+	}
+
+	// setup volume mounts
+	deploymentVolumeMounts := []corev1.VolumeMount{
+		{
+			Name:      "casc-config",
+			ReadOnly:  true,
+			MountPath: "/var/jenkins_home/casc_configs",
+		},
+		{
+			Name:      "job-storage",
+			ReadOnly:  false,
+			MountPath: "/var/jenkins_home/jobs",
+		},
+		{
+			Name:      "required-plugins",
+			ReadOnly:  true,
+			MountPath: "/var/jenkins_home/required_plugins",
+		},
+	}
+
+	if jenkinsInstance.Spec.CascSecret != "" {
+		deploymentVolumeMounts = append(deploymentVolumeMounts, corev1.VolumeMount{
+			Name:      "casc-secret",
+			ReadOnly:  true,
+			MountPath: "/var/jenkins_home/casc_secrets",
+		})
+	}
+
+	if jenkinsInstance.Spec.GroovySecret != "" {
+		deploymentVolumeMounts = append(deploymentVolumeMounts, corev1.VolumeMount{
+			Name:      "groovy-secret",
+			ReadOnly:  false,
+			MountPath: "/var/jenkins_home/init.groovy.d",
+		})
+	}
+
 	if exists {
 		deploymentCopy := deployment.DeepCopy()
 		deploymentCopy.Annotations = jenkinsInstance.Spec.Annotations
 		deploymentCopy.Spec.Replicas = &replicas
 		deploymentCopy.Spec.Selector = &metav1.LabelSelector{
-			MatchLabels: labels,
+			MatchLabels: useLabels,
 		}
 		deploymentCopy.Spec.Template.Spec.Containers = []corev1.Container{
 			{
@@ -1264,34 +981,10 @@ func (bc *ReconcileJenkinsInstance) newDeployment(instanceName types.NamespacedN
 					commandString,
 				},
 				ImagePullPolicy: JenkinsPullPolicy,
-				VolumeMounts: []corev1.VolumeMount{
-					{
-						Name:      "init-groovy-d",
-						ReadOnly:  false,
-						MountPath: "/var/jenkins_home/init.groovy.d",
-					},
-					{
-						Name:      "job-storage",
-						ReadOnly:  false,
-						MountPath: "/var/jenkins_home/jobs",
-					},
-				},
+				VolumeMounts:    deploymentVolumeMounts,
 			},
 		}
-		deploymentCopy.Spec.Template.Spec.Volumes = []corev1.Volume{
-			{
-				Name: "init-groovy-d",
-				VolumeSource: corev1.VolumeSource{
-					Secret: &corev1.SecretVolumeSource{
-						SecretName: jenkinsInstance.GetName(),
-					},
-				},
-			},
-			{
-				Name:         "job-storage",
-				VolumeSource: volumeSource,
-			},
-		}
+		deploymentCopy.Spec.Template.Spec.Volumes = deploymentVolumes
 		deploymentCopy.Spec.Template.Spec.ServiceAccountName = jenkinsInstance.Spec.ServiceAccount
 
 		changed := reflect.DeepEqual(deploymentCopy.Annotations, deployment.Annotations) &&
@@ -1319,11 +1012,11 @@ func (bc *ReconcileJenkinsInstance) newDeployment(instanceName types.NamespacedN
 			Spec: appsv1.DeploymentSpec{
 				Replicas: &replicas,
 				Selector: &metav1.LabelSelector{
-					MatchLabels: labels,
+					MatchLabels: useLabels,
 				},
 				Template: corev1.PodTemplateSpec{
 					ObjectMeta: metav1.ObjectMeta{
-						Labels: labels,
+						Labels: useLabels,
 					},
 					Spec: corev1.PodSpec{
 						SecurityContext: &corev1.PodSecurityContext{
@@ -1354,35 +1047,11 @@ func (bc *ReconcileJenkinsInstance) newDeployment(instanceName types.NamespacedN
 									commandString,
 								},
 								ImagePullPolicy: JenkinsPullPolicy,
-								VolumeMounts: []corev1.VolumeMount{
-									{
-										Name:      "init-groovy-d",
-										ReadOnly:  false,
-										MountPath: "/var/jenkins_home/init.groovy.d",
-									},
-									{
-										Name:      "job-storage",
-										ReadOnly:  false,
-										MountPath: "/var/jenkins_home/jobs",
-									},
-								},
+								VolumeMounts:    deploymentVolumeMounts,
 							},
 						},
 
-						Volumes: []corev1.Volume{
-							{
-								Name: "init-groovy-d",
-								VolumeSource: corev1.VolumeSource{
-									Secret: &corev1.SecretVolumeSource{
-										SecretName: jenkinsInstance.GetName(),
-									},
-								},
-							},
-							{
-								Name:         "job-storage",
-								VolumeSource: volumeSource,
-							},
-						},
+						Volumes: deploymentVolumes,
 					},
 				},
 			},

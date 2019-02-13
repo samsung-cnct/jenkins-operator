@@ -6,9 +6,9 @@ WORKDIR /go/src/github.com/maratoid/jenkins-operator
 COPY .  ./
 
 # Build
-ENV KUBEBUILDER_VERSION=1.0.5
+ENV KUBEBUILDER_VERSION=1.0.8
 ENV KUBEBUILDER_ARCH=amd64
-ENV KUSTOMIZE_VERSION=1.0.10
+ENV KUSTOMIZE_VERSION=2.0.1
 ENV KUSTOMIZE_ARCH=amd64
 ENV PATH="${PATH}:/usr/local/kubebuilder/bin"
 RUN curl -L -O https://github.com/kubernetes-sigs/kubebuilder/releases/download/v${KUBEBUILDER_VERSION}/kubebuilder_${KUBEBUILDER_VERSION}_linux_${KUBEBUILDER_ARCH}.tar.gz \

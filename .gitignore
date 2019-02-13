@@ -8,6 +8,11 @@
 # Test binary, build with `go test -c`
 *.test
 
+build/kustomize/crd/protected/instances/base/
+build/kustomize/crd/unprotected/instances/base/
+build/kustomize/rbac/role/base/
+build/kustomize/rbac/rolebinding/base/
+
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 /jenkins-operator

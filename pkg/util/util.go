@@ -4,46 +4,25 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/golang/glog"
 	"github.com/maratoid/jenkins-operator/pkg/test"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes/scheme"
 	"os"
-	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 // MergeSecretData merges secret Data map
-func MergeSecretData(ms ...map[string][]byte) map[string][]byte {
-	res := map[string][]byte{}
+func MergeData(ms ...map[string]string) map[string]string {
+	res := map[string]string{}
 	for _, m := range ms {
 		for k, v := range m {
 			res[k] = v
 		}
 	}
 	return res
-}
-
-// InArray searches for arbitrary object types in an array
-func InArray(val interface{}, array interface{}) (exists bool, index int) {
-	exists = false
-	index = -1
-
-	switch reflect.TypeOf(array).Kind() {
-	case reflect.Slice:
-		s := reflect.ValueOf(array)
-
-		for i := 0; i < s.Len(); i++ {
-			if reflect.DeepEqual(val, s.Index(i).Interface()) == true {
-				index = i
-				exists = true
-				return
-			}
-		}
-	}
-
-	return
 }
 
 // GetNodePort retrieves node port number of a specified kubernetes service
@@ -55,25 +34,6 @@ func GetNodePort(servicePorts []corev1.ServicePort, portName string) int32 {
 	}
 
 	return 0
-}
-
-// AddFinalizer adds a finalizer string to an array if not present
-func AddFinalizer(finalizer string, finalizers []string) []string {
-	if exists, _ := InArray(finalizer, finalizers); exists {
-		return finalizers
-	}
-
-	return append(finalizers, finalizer)
-}
-
-// DeleteFinalizer removes a finalizer string from an array if present
-func DeleteFinalizer(finalizer string, finalizers []string) []string {
-	// only delete if at the top of the list
-	if exists, index := InArray(finalizer, finalizers); exists && index == 0 {
-		return append(finalizers[:index], finalizers[index+1:]...)
-	}
-
-	return finalizers
 }
 
 // AmRunningInCluster returns true if this binary is running in kubernetes cluster
@@ -128,6 +88,26 @@ func GetServiceEndpoint(service *corev1.Service, path string, internalPort int32
 			if host != "" {
 				break
 			}
+		}
+
+		if host == "" {
+			glog.Warningf("could not locate any nodes with an external IP. will attempt to fall back to internal IP")
+			for _, inst := range nodeList.Items {
+				for _, address := range inst.Status.Addresses {
+					if address.Type == corev1.NodeInternalIP {
+						host = address.Address
+						break
+					}
+				}
+
+				if host != "" {
+					break
+				}
+			}
+		}
+
+		if host == "" {
+			return "", fmt.Errorf("could not find a node with an available IP address")
 		}
 
 		var nodePort int32 = 0
