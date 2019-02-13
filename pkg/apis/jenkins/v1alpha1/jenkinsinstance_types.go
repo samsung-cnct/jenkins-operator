@@ -43,21 +43,6 @@ type ServiceSpec struct {
 	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
-type IngressSpec struct {
-
-	// Jenkins ingress annotations
-	Annotations map[string]string `json:"annotations,omitempty"`
-
-	// Jenkins ingress tls secret
-	TlsSecret string `json:"tlssecret,omitempty"`
-
-	// Jenkins service name, if pre-existing
-	Service string `json:"service,omitempty"`
-
-	// Ingress backend path
-	Path string `json:"path,omitempty"`
-}
-
 type StorageSpec struct {
 	// Name of pre-existing (or not) PVC for jobs
 	JobsPvc string `json:"jobspvc,omitempty"`

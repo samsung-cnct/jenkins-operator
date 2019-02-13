@@ -27,8 +27,6 @@ import (
 	"github.com/spf13/viper"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/api/extensions/v1beta1"
-	netv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -133,24 +131,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 
 	// Watch a Service created by JenkinsInstance
 	err = c.Watch(&source.Kind{Type: &corev1.Service{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &jenkinsv1alpha1.JenkinsInstance{},
-	}, watchPredicate)
-	if err != nil {
-		return err
-	}
-
-	// Watch an Ingress created by JenkinsInstance
-	err = c.Watch(&source.Kind{Type: &v1beta1.Ingress{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &jenkinsv1alpha1.JenkinsInstance{},
-	}, watchPredicate)
-	if err != nil {
-		return err
-	}
-
-	// Watch a Networkpolicy created by JenkinsInstance
-	err = c.Watch(&source.Kind{Type: &netv1.NetworkPolicy{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &jenkinsv1alpha1.JenkinsInstance{},
 	}, watchPredicate)
