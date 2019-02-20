@@ -1,5 +1,5 @@
 # Jenkins operator
-[![Build Status](https://jenkins.migrations.cnct.io/buildStatus/icon?job=jenkins-operator/master)](https://jenkins.migrations.cnct.io/job/jenkins-operator/job/master/)
+[![Build Status](https://jenkins.cnct.io/buildStatus/icon?job=jenkins-operator/master)](https://jenkins.cnct.io/job/jenkins-operator/job/master/)
 
 ## Project status: alpha
 
@@ -30,7 +30,7 @@ $ helm install deployments/helm/jenkins-operator --name jenkins-operator
 or
 
 ```bash
-$ helm repo add cnct https://charts.migrations.cnct.io
+$ helm repo add cnct https://charts.cnct.io
 $ helm repo update
 $ helm install cnct/jenkins-operator --name jenkins-operator
 ```
