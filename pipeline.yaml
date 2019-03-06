@@ -10,10 +10,12 @@ deployments:
     timeout: 600
     retries: 2
     setAppVersion: true
-    release: jenkins-operator-pipeline
+    release: jo-pipeline
     test:
       values:
         - key: chartCrds
           value: false
+        - key: nameOverride
+          value: jo-pipeline
 prod:
   doDeploy: none
