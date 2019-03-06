@@ -44,7 +44,7 @@ A Kubernetes secret called `jenkins-test` with `JENKINS_ADMIN_USER` = `admin` an
 
 ### Create a Jenkins instance
 ```bash
-$ kubectl create -f config/samples/jenkins_v1alpha1_jenkinsinstance.yaml
+$ kubectl create -f config/samples/jenkins_v1alpha2_jenkinsinstance.yaml
 ```
 
 This will create a Jenkins Kubernetes deployment along with a `NodePort` Kubernetes service, a 1Gb Kubernetes persistent volume for job storage, as well a few other Kubernetes objects.
@@ -71,7 +71,7 @@ So, you should be able to point your browser to `http://192.168.64.19:31363` and
 Instance creation and destruction is controlled through `JenkinsInstance` Kubernetes custom resources:
 
 ```
-apiVersion: jenkins.jenkinsoperator.maratoid.github.com/v1alpha1
+apiVersion: jenkins.jenkinsoperator.maratoid.github.com/v1alpha2
 kind: JenkinsInstance
 metadata:
     labels:                                         # dictionary of Kubernetes labels
@@ -218,7 +218,7 @@ type: Opaque
 and then use them in a `JenkinsInstance` custom resource:
 
 ```
-apiVersion: jenkins.jenkinsoperator.maratoid.github.com/v1alpha1
+apiVersion: jenkins.jenkinsoperator.maratoid.github.com/v1alpha2
 kind: JenkinsInstance
 metadata:
   labels:
@@ -294,7 +294,7 @@ jenkins.save()
 You can use this secret in jenkins instance CR:
 
 ```
-apiVersion: jenkins.jenkinsoperator.maratoid.github.com/v1alpha1
+apiVersion: jenkins.jenkinsoperator.maratoid.github.com/v1alpha2
 kind: JenkinsInstance
 ...
 spec:

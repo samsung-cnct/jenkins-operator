@@ -18,7 +18,7 @@ package jenkinsinstance
 
 import (
 	"context"
-	jenkinsv1alpha1 "github.com/maratoid/jenkins-operator/pkg/apis/jenkins/v1alpha1"
+	jenkinsv1alpha2 "github.com/maratoid/jenkins-operator/pkg/apis/jenkins/v1alpha2"
 	"github.com/maratoid/jenkins-operator/pkg/test"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -154,7 +154,7 @@ var _ = Describe("jenkins instance controller", func() {
 	})
 
 	Describe("reconciles", func() {
-		var instance *jenkinsv1alpha1.JenkinsInstance
+		var instance *jenkinsv1alpha2.JenkinsInstance
 		var expectedRequest reconcile.Request
 		var standardObjectkey types.NamespacedName
 		var adminSecret *corev1.Secret
@@ -226,17 +226,17 @@ var _ = Describe("jenkins instance controller", func() {
 			}
 			Expect(c.Create(context.TODO(), serviceAccount)).To(Succeed())
 
-			instance = &jenkinsv1alpha1.JenkinsInstance{
+			instance = &jenkinsv1alpha2.JenkinsInstance{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      name,
 					Namespace: namespace,
 				},
-				Spec: jenkinsv1alpha1.JenkinsInstanceSpec{
+				Spec: jenkinsv1alpha2.JenkinsInstanceSpec{
 					Image: image,
 					Env: map[string]string{
 						envVar: envVar,
 					},
-					CascConfig: &jenkinsv1alpha1.CascConfigSpec{
+					CascConfig: &jenkinsv1alpha2.CascConfigSpec{
 						ConfigMap: cascConfigN,
 					},
 					CascSecret:   cascSecretN,
@@ -245,14 +245,14 @@ var _ = Describe("jenkins instance controller", func() {
 						annotation: annotation,
 					},
 					AdminSecret: secret,
-					Service: &jenkinsv1alpha1.ServiceSpec{
+					Service: &jenkinsv1alpha2.ServiceSpec{
 						Name:        name,
 						ServiceType: serviceType,
 						Annotations: map[string]string{
 							annotation: annotation,
 						},
 					},
-					Storage: &jenkinsv1alpha1.StorageSpec{
+					Storage: &jenkinsv1alpha2.StorageSpec{
 						JobsPvc: name,
 						JobsPvcSpec: &corev1.PersistentVolumeClaimSpec{
 							AccessModes: []corev1.PersistentVolumeAccessMode{

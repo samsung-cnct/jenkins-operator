@@ -123,7 +123,7 @@ EOF
 d) Create jenkins instance custom resource:
 
 kubectl apply -f - <<EOF
-apiVersion: jenkins.jenkinsoperator.maratoid.github.com/v1alpha1
+apiVersion: jenkins.jenkinsoperator.maratoid.github.com/v1alpha2
 kind: JenkinsInstance
 metadata:
   labels:
