@@ -10,3 +10,12 @@ metadata:
     app.kubernetes.io/managed-by: '{{.Release.Service}}'
     app.kubernetes.io/instance: '{{.Release.Name}}'
     app.kubernetes.io/version: '{{.Chart.AppVersion | replace "+" "_" | trunc 63}}'
+spec:
+  version: null
+  versions:
+    - name: v1alpha1
+      served: false
+      storage: false
+    - name: v1alpha2
+      served: true
+      storage: true

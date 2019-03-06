@@ -21,7 +21,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/golang/glog"
-	jenkinsv1alpha1 "github.com/maratoid/jenkins-operator/pkg/apis/jenkins/v1alpha1"
+	jenkinsv1alpha2 "github.com/maratoid/jenkins-operator/pkg/apis/jenkins/v1alpha2"
 	"github.com/maratoid/jenkins-operator/pkg/configdata"
 	"github.com/maratoid/jenkins-operator/pkg/util"
 	"github.com/spf13/viper"
@@ -97,7 +97,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	watchPredicate := util.NewPredicate(viper.GetString("namespace"))
 
 	// Watch for changes to JenkinsInstance
-	err = c.Watch(&source.Kind{Type: &jenkinsv1alpha1.JenkinsInstance{}}, &handler.EnqueueRequestForObject{}, watchPredicate)
+	err = c.Watch(&source.Kind{Type: &jenkinsv1alpha2.JenkinsInstance{}}, &handler.EnqueueRequestForObject{}, watchPredicate)
 	if err != nil {
 		return err
 	}
@@ -105,7 +105,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Watch a Deployment created by JenkinsInstance
 	err = c.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
-		OwnerType:    &jenkinsv1alpha1.JenkinsInstance{},
+		OwnerType:    &jenkinsv1alpha2.JenkinsInstance{},
 	}, watchPredicate)
 	if err != nil {
 		return err
@@ -114,7 +114,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Watch a PVC created by JenkinsInstance
 	err = c.Watch(&source.Kind{Type: &corev1.PersistentVolumeClaim{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
-		OwnerType:    &jenkinsv1alpha1.JenkinsInstance{},
+		OwnerType:    &jenkinsv1alpha2.JenkinsInstance{},
 	}, watchPredicate)
 	if err != nil {
 		return err
@@ -123,7 +123,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Watch a Secret created by JenkinsInstance
 	err = c.Watch(&source.Kind{Type: &corev1.Secret{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
-		OwnerType:    &jenkinsv1alpha1.JenkinsInstance{},
+		OwnerType:    &jenkinsv1alpha2.JenkinsInstance{},
 	}, watchPredicate)
 	if err != nil {
 		return err
@@ -132,7 +132,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Watch a Service created by JenkinsInstance
 	err = c.Watch(&source.Kind{Type: &corev1.Service{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
-		OwnerType:    &jenkinsv1alpha1.JenkinsInstance{},
+		OwnerType:    &jenkinsv1alpha2.JenkinsInstance{},
 	}, watchPredicate)
 	if err != nil {
 		return err
@@ -147,7 +147,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		&handler.EnqueueRequestsFromMapFunc{
 			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
 
-				jenkinsInstances := &jenkinsv1alpha1.JenkinsInstanceList{}
+				jenkinsInstances := &jenkinsv1alpha2.JenkinsInstanceList{}
 				err = mgr.GetClient().List(
 					context.TODO(),
 					&client.ListOptions{LabelSelector: labels.Everything()},
@@ -194,8 +194,8 @@ type JenkinsTokenRequest struct {
 	cancelFunc context.CancelFunc
 }
 
-func (bc *ReconcileJenkinsInstance) getJenkinsInstance(name types.NamespacedName) (*jenkinsv1alpha1.JenkinsInstance, error) {
-	jenkinsInstance := &jenkinsv1alpha1.JenkinsInstance{}
+func (bc *ReconcileJenkinsInstance) getJenkinsInstance(name types.NamespacedName) (*jenkinsv1alpha2.JenkinsInstance, error) {
+	jenkinsInstance := &jenkinsv1alpha2.JenkinsInstance{}
 	err := bc.Client.Get(context.TODO(), name, jenkinsInstance)
 	return jenkinsInstance, err
 }

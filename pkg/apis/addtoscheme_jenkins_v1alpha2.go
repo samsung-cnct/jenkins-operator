@@ -14,10 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package v1alpha1 contains API Schema definitions for the jenkins v1alpha1 API group
-// +k8s:openapi-gen=true
-// +k8s:deepcopy-gen=package,register
-// +k8s:conversion-gen=github.com/maratoid/jenkins-operator/pkg/apis/jenkins
-// +k8s:defaulter-gen=TypeMeta
-// +groupName=jenkins.jenkinsoperator.maratoid.github.com
-package v1alpha1
+package apis
+
+import (
+	"github.com/maratoid/jenkins-operator/pkg/apis/jenkins/v1alpha2"
+)
+
+func init() {
+	// Register the types with the Scheme so the components can map objects to GroupVersionKinds and back
+	AddToSchemes = append(AddToSchemes, v1alpha2.SchemeBuilder.AddToScheme)
+}
