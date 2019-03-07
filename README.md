@@ -71,7 +71,7 @@ So, you should be able to point your browser to `http://192.168.64.19:31363` and
 Instance creation and destruction is controlled through `JenkinsInstance` Kubernetes custom resources:
 
 ```
-apiVersion: jenkins.jenkinsoperator.maratoid.github.com/v1alpha2
+apiVersion: jenkins.jenkinsoperator.samsung-cnct.github.com/v1alpha2
 kind: JenkinsInstance
 metadata:
     labels:                                         # dictionary of Kubernetes labels
@@ -218,7 +218,7 @@ type: Opaque
 and then use them in a `JenkinsInstance` custom resource:
 
 ```
-apiVersion: jenkins.jenkinsoperator.maratoid.github.com/v1alpha2
+apiVersion: jenkins.jenkinsoperator.samsung-cnct.github.com/v1alpha2
 kind: JenkinsInstance
 metadata:
   labels:
@@ -294,7 +294,7 @@ jenkins.save()
 You can use this secret in jenkins instance CR:
 
 ```
-apiVersion: jenkins.jenkinsoperator.maratoid.github.com/v1alpha2
+apiVersion: jenkins.jenkinsoperator.samsung-cnct.github.com/v1alpha2
 kind: JenkinsInstance
 ...
 spec:
@@ -304,3 +304,15 @@ spec:
 ```
 
 The resulting Jenkins instance will have a `master-agent-security.groovy` file in `/var/jenkins_home/init.groovy.d/master-agent-security.groovy` that will launch during Jenkins startup and enable Jenkins's agent-to-master security subsystem.
+
+# Build
+
+## Install tools
+
+* [Install](https://book.kubebuilder.io/getting_started/installation_and_setup.html) kubebuilder
+* Clone this repository into `$GOPATH/src/github.com/samsung-cnct/jenkins-operator`
+* Install other tool dependencies by running `make -f build/Makefile install-dep`
+* Build for your OS with
+  * `make -f build/Makefile darwin`
+  * `make -f build/Makefile linux`
+  * `make -f build/Makefile container`

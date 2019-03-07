@@ -17,7 +17,7 @@ limitations under the License.
 package apis
 
 import (
-	"github.com/maratoid/jenkins-operator/pkg/apis/jenkins/v1alpha2"
+	"github.com/samsung-cnct/jenkins-operator/pkg/apis/jenkins/v1alpha2"
 )
 
 func init() {

@@ -4,9 +4,9 @@ metadata:
   creationTimestamp: null
   labels:
     controller-tools.k8s.io: "1.0"
-  name: jenkinsinstances.jenkins.jenkinsoperator.maratoid.github.com
+  name: jenkinsinstances.jenkins.jenkinsoperator.samsung-cnct.github.com
 spec:
-  group: jenkins.jenkinsoperator.maratoid.github.com
+  group: jenkins.jenkinsoperator.samsung-cnct.github.com
   names:
     kind: JenkinsInstance
     plural: jenkinsinstances

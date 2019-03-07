@@ -12,5 +12,5 @@ sources:
 - https://github.com/samsung-cnct/jenkins-operator
 - https://github.com/jenkinsci/jenkins
 maintainers:
-- name: maratoid
+- name: Marat Garafutdinov
   email: maratoid@gmail.com

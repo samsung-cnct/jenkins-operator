@@ -113,7 +113,7 @@ rules:
   - patch
   - delete
 - apiGroups:
-  - jenkins.jenkinsoperator.maratoid.github.com
+  - jenkins.jenkinsoperator.samsung-cnct.github.com
   resources:
   - jenkinsinstances
   verbs:

@@ -11,6 +11,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"go/ast"
+	"go/parser"
 	"go/token"
 
 	"golang.org/x/tools/go/packages"
@@ -68,6 +70,7 @@ gopls flags are:
 // If no arguments are passed it will invoke the server sub command, as a
 // temporary measure for compatibility.
 func (app *Application) Run(ctx context.Context, args ...string) error {
+	app.Serve.app = app
 	if len(args) == 0 {
 		tool.Main(ctx, &app.Serve, args)
 		return nil
@@ -76,6 +79,10 @@ func (app *Application) Run(ctx context.Context, args ...string) error {
 	app.Config.Tests = true
 	if app.Config.Fset == nil {
 		app.Config.Fset = token.NewFileSet()
+	}
+	app.Config.Context = ctx
+	app.Config.ParseFile = func(fset *token.FileSet, filename string, src []byte) (*ast.File, error) {
+		return parser.ParseFile(fset, filename, src, parser.AllErrors|parser.ParseComments)
 	}
 	command, args := args[0], args[1:]
 	for _, c := range app.commands() {
@@ -91,7 +98,6 @@ func (app *Application) Run(ctx context.Context, args ...string) error {
 // command line.
 // The command is specified by the first non flag argument.
 func (app *Application) commands() []tool.Application {
-	app.Serve.app = app
 	return []tool.Application{
 		&app.Serve,
 		&query{app: app},

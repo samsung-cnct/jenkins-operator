@@ -17,7 +17,7 @@ limitations under the License.
 package main
 
 import (
-	"github.com/maratoid/jenkins-operator/cmd/manager/cmd"
+	"github.com/samsung-cnct/jenkins-operator/cmd/manager/cmd"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 )
 

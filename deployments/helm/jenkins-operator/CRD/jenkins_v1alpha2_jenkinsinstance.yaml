@@ -9,9 +9,9 @@ metadata:
     app.kubernetes.io/version: '{{.Chart.AppVersion | replace "+" "_" | trunc 63}}'
     controller-tools.k8s.io: "1.0"
     helm.sh/chart: '{{include "jenkins-operator.chart" .}}'
-  name: jenkinsinstances.jenkins.jenkinsoperator.maratoid.github.com
+  name: jenkinsinstances.jenkins.jenkinsoperator.samsung-cnct.github.com
 spec:
-  group: jenkins.jenkinsoperator.maratoid.github.com
+  group: jenkins.jenkinsoperator.samsung-cnct.github.com
   names:
     kind: JenkinsInstance
     plural: jenkinsinstances

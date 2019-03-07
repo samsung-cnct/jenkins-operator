@@ -17,7 +17,7 @@ limitations under the License.
 package controller
 
 import (
-	"github.com/maratoid/jenkins-operator/pkg/controller/jenkinsinstance"
+	"github.com/samsung-cnct/jenkins-operator/pkg/controller/jenkinsinstance"
 )
 
 func init() {
