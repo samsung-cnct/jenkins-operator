@@ -5,6 +5,7 @@ GOGET=$(GOCMD) get
 GOTEST=$(GOCMD) test
 PROJECTDIR=$(shell pwd)
 DEPCMD=dep
+KUBEBUILDERCMD=kubebuilder
 
 # Variables for binary version information
 GIT_COMMIT=$(shell git rev-parse HEAD)
@@ -12,7 +13,7 @@ APP_VERSION=$(shell cat .versionfile)
 BUILD_DATE=$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 
 # Associating version information variables with data
-VERSION_PACKAGE=github.com/maratoid/jenkins-operator/pkg/version
+VERSION_PACKAGE=github.com/samsung-cnct/jenkins-operator/pkg/version
 LD_DATA_GIT_COMMIT=-X ${VERSION_PACKAGE}.gitCommit=${GIT_COMMIT}
 LD_DATA_VERSION=-X ${VERSION_PACKAGE}.version=${APP_VERSION}
 LD_DATA_BUILD_DATE=-X ${VERSION_PACKAGE}.buildDate=${BUILD_DATE}
@@ -44,7 +45,7 @@ bin-data:
 # Run tests
 test: manifests bin-data generate fmt vet
 	export JENKINS_OPERATOR_TESTRUN=true; \
-	ginkgo -r ./pkg/... ./cmd/... -coverprofile cover.out
+	ginkgo -r -trace ./pkg/... ./cmd/... -coverprofile cover.out
 
 # Build manager binary
 manager-linux-amd64: manifests bin-data generate fmt vet
@@ -98,7 +99,8 @@ install-dep:
 # New Dep will just blow away Gopkg, vendor and do a dep init
 new-dep:
 	rm -rf vendor Gopkg.toml Gopkg.lock
-	$(DEPCMD) init
+	$(KUBEBUILDERCMD) update vendor
+	$(DEPCMD) ensure
 
 # For builds where we're just going to go along with whatever Gopkg is saying
 dep-ensure:

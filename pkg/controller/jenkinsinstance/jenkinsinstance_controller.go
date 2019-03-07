@@ -21,9 +21,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/golang/glog"
-	jenkinsv1alpha2 "github.com/maratoid/jenkins-operator/pkg/apis/jenkins/v1alpha2"
-	"github.com/maratoid/jenkins-operator/pkg/configdata"
-	"github.com/maratoid/jenkins-operator/pkg/util"
+	jenkinsv1alpha2 "github.com/samsung-cnct/jenkins-operator/pkg/apis/jenkins/v1alpha2"
+	"github.com/samsung-cnct/jenkins-operator/pkg/configdata"
+	"github.com/samsung-cnct/jenkins-operator/pkg/util"
 	"github.com/spf13/viper"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -262,7 +262,7 @@ func (bc *ReconcileJenkinsInstance) getDeployment(instanceName types.NamespacedN
 // +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=nodes,verbs=list
 // +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=jenkins.jenkinsoperator.maratoid.github.com,resources=jenkinsinstances,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=jenkins.jenkinsoperator.samsung-cnct.github.com,resources=jenkinsinstances,verbs=get;list;watch;create;update;patch;delete
 func (bc *ReconcileJenkinsInstance) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	jenkinsInstance, err := bc.getJenkinsInstance(request.NamespacedName)
 	if err != nil {

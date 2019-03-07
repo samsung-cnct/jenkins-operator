@@ -18,10 +18,10 @@ package jenkinsinstance
 
 import (
 	"context"
-	jenkinsv1alpha2 "github.com/maratoid/jenkins-operator/pkg/apis/jenkins/v1alpha2"
-	"github.com/maratoid/jenkins-operator/pkg/test"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	jenkinsv1alpha2 "github.com/samsung-cnct/jenkins-operator/pkg/apis/jenkins/v1alpha2"
+	"github.com/samsung-cnct/jenkins-operator/pkg/test"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"

@@ -8,10 +8,10 @@ before:
 
 builds:
   - ldflags:
-      - -X github.com/maratoid/jenkins-operator/pkg/version.gitCommit=${GIT_COMMIT}
-      - -X github.com/maratoid/jenkins-operator/pkg/version.gitVersion=${GIT_TAG}
-      - -X github.com/maratoid/jenkins-operator/pkg/version.gitTreeState=${GIT_DIRTY}
-      - -X github.com/maratoid/jenkins-operator/pkg/version.buildDate=${BUILD_DATE}
+      - -X github.com/samsung-cnct/jenkins-operator/pkg/version.gitCommit=${GIT_COMMIT}
+      - -X github.com/samsung-cnct/jenkins-operator/pkg/version.gitVersion=${GIT_TAG}
+      - -X github.com/samsung-cnct/jenkins-operator/pkg/version.gitTreeState=${GIT_DIRTY}
+      - -X github.com/samsung-cnct/jenkins-operator/pkg/version.buildDate=${BUILD_DATE}
       - -w -extldflags "-static"
     flags:
       - -a

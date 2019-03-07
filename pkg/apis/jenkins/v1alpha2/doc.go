@@ -17,7 +17,7 @@ limitations under the License.
 // Package v1alpha2 contains API Schema definitions for the jenkins v1alpha2 API group
 // +k8s:openapi-gen=true
 // +k8s:deepcopy-gen=package,register
-// +k8s:conversion-gen=github.com/maratoid/jenkins-operator/pkg/apis/jenkins
+// +k8s:conversion-gen=github.com/samsung-cnct/jenkins-operator/pkg/apis/jenkins
 // +k8s:defaulter-gen=TypeMeta
-// +groupName=jenkins.jenkinsoperator.maratoid.github.com
+// +groupName=jenkins.jenkinsoperator.samsung-cnct.github.com
 package v1alpha2

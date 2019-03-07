@@ -2,7 +2,7 @@
 FROM golang:1.10.3 as builder
 
 # Copy in the go src
-WORKDIR /go/src/github.com/maratoid/jenkins-operator
+WORKDIR /go/src/github.com/samsung-cnct/jenkins-operator
 COPY .  ./
 
 # Build
@@ -22,5 +22,5 @@ RUN make -f build/Makefile install-dep linux
 # Copy the controller-manager into a thin image
 FROM alpine:3.8
 WORKDIR /root/
-COPY --from=builder /go/src/github.com/maratoid/jenkins-operator/jenkins-operator .
+COPY --from=builder /go/src/github.com/samsung-cnct/jenkins-operator/jenkins-operator .
 ENTRYPOINT ["./jenkins-operator", "--alsologtostderr", "--install-crds=true"]

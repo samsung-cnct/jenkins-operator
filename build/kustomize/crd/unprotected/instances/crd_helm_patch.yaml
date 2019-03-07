@@ -1,7 +1,7 @@
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
-  name: jenkinsinstances.jenkins.jenkinsoperator.maratoid.github.com
+  name: jenkinsinstances.jenkins.jenkinsoperator.samsung-cnct.github.com
   labels:
     helm.sh/chart: '{{include "jenkins-operator.chart" .}}'
     app.kubernetes.io/name: '{{include "jenkins-operator.name" .}}'

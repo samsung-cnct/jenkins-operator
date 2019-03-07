@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/maratoid/jenkins-operator/pkg/version"
+	"github.com/samsung-cnct/jenkins-operator/pkg/version"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
