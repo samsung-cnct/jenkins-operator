@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha2
 
 import (
+	"encoding/json"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -56,7 +57,7 @@ type PluginSpec struct {
 	Id string `json:"id"`
 
 	// plugin version string, follows the format at https://github.com/jenkinsci/docker#plugin-version-format
-	Version string `json:"version"`
+	Version json.Number `json:"version"`
 }
 
 // JenkinsInstanceSpec defines the desired state of JenkinsInstance
@@ -66,6 +67,9 @@ type JenkinsInstanceSpec struct {
 	// What container image to use for a new jenkins instance
 	// +kubebuilder:validation:Pattern=.+:.+
 	Image string `json:"image,omitempty"`
+
+	// image pull policy
+	ImagePullPolicy corev1.PullPolicy `json:"imagepullpolicy,omitempty"`
 
 	// Dictionary of environment variable values
 	Env map[string]string `json:"env,omitempty"`
@@ -95,6 +99,27 @@ type JenkinsInstanceSpec struct {
 
 	// Jenkins storage options
 	Storage *StorageSpec `json:"storage,omitempty"`
+
+	// Affinity settings
+	Affinity corev1.Affinity `json:"affinity,omitempty"`
+
+	// dns policy
+	DNSPolicy corev1.DNSPolicy `json:"dnspolicy,omitempty"`
+
+	// node selector
+	NodeSelector map[string]string `json:"nodeselector,omitempty"`
+
+	// specific node name
+	NodeName string `json:"nodename,omitempty"`
+
+	// image pull secrets
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagepullsecrets,omitempty"`
+
+	// tolerations
+	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
+
+	// container resource requests
+	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
 // JenkinsInstanceStatus defines the observed state of JenkinsInstance

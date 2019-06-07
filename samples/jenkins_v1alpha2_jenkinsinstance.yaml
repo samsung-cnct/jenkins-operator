@@ -6,13 +6,23 @@ metadata:
   name: jenkinsinstance-sample
 spec:
   image: "jenkins/jenkins:lts"
+  imagepullpolicy: Always
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "250m"
+    limits:
+      memory: "128Mi"
+      cpu: "500m"
   env:
     SOME_ENV: "test"
   plugins:
+    - id: cloudbees-folder
+      version: "6.8"
     - id: build-blocker-plugin
-      version: latest
+      version: 1.7.3
     - id: authorize-project
-      version: latest
+      version: 1.3.0
     - id: kubernetes
       version: latest
   cascconfig:
@@ -38,4 +48,15 @@ spec:
       resources:
         requests:
           storage: 1G
+  nodeselector:
+    "kubernetes.io/hostname": minikube
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+            - key: "kubernetes.io/hostname"
+              operator: In
+              values:
+                - minikube
 
