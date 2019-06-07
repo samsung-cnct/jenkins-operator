@@ -79,6 +79,16 @@ metadata:
     name: jenkinsinstance-sample                    # Name for this Jenkins instance object
 spec:
     image: "jenkins/jenkins:lts"                    # docker image with tag for this jenkins deployment
+    imagepullpolicy: Always                         # image pull policy
+    imagepullsecrets:                               # image pull secrets
+        - name: myregistrykey
+    resources:                                      # resources and limits config
+        requests:
+            memory: "64Mi"
+            cpu: "250m"
+        limits:
+            memory: "128Mi"
+            cpu: "500m"
     env:                                            # dictionary of environment variables to be set in the jenkins instance
         SOME_ENV: "test"
     plugins:                                        # dictionary of Jenkins plugins to install PRIOR to Jenkins startup
@@ -90,8 +100,8 @@ spec:
             jenkins:
                 ...
     cascsecret: jenkins-admin-secret                # name of a secret in the same namespace. Keys will be converted to files used for token replacement in JCASC config files
-                                                    # per https://github.com/jenkinsci/configuration-as-code-plugin#handling-secrets 
-    groovysecret: jenkins-groovy-secret             # name of a secret in the same namespace. Keys will be mounted as .groovy files into ${JENKINS_HOME}/init.groovy.d and ran on startup        
+                                                    # per https://github.com/jenkinsci/configuration-as-code-plugin#handling-secrets
+    groovysecret: jenkins-groovy-secret             # name of a secret in the same namespace. Keys will be mounted as .groovy files into ${JENKINS_HOME}/init.groovy.d and ran on startup
     annotations:                                    # Jenkins deployment annotations
         cnct.io/annotation: "test"
         cnct.io/other-annotation: "other test"
@@ -107,11 +117,25 @@ spec:
     storage:                                        # storage options
         jobspvc: jenkins                            # Name of PVC for job storage. If does not exist it will be created. If name is not specified, EmptyDir is used
         jobspvcspec:                                # If PVC is to be created, use this spec
-          accessModes:                              # PVC access modes
-            - ReadWriteOnce
-          resources:                                # PVC requests
-            requests:
-              storage: 1Gi
+            accessModes:                            # PVC access modes
+                - ReadWriteOnce
+            resources:                              # PVC requests
+                requests:
+                    storage: 1Gi
+    affinity:                                       # k8s affinity configuration for jenkins pod
+        nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+                ...
+    dnspolicy: Default                              # k8s dns policy configuration for jenkins pod
+    nodeselector:                                   # k8s node selector configuration for jenkins pod
+        disktype: ssd
+    nodename: kube-01                               # k8s node name configuration for jenkins pod
+    tolerations:                                    # k8s tolerations config for jenkins pod
+        - key: "key"
+          operator: "Equal"
+          value: "value"
+          effect: "NoSchedule"
 ```
 
 ## Managing Jenkins resources
@@ -193,11 +217,11 @@ data:
       system:
         domainCredentials:
         - credentials:
-              - usernamePassword:
-                  scope:    GLOBAL
-                  id:       casc-username-password
-                  username: root
-                  password: ${SUDO_PASSWORD}
+          - usernamePassword:
+              scope:    GLOBAL
+              id:       casc-username-password
+              username: root
+              password: ${SUDO_PASSWORD}
 ```
 
 and a secret to do substitutions for `${SUDO_PASSWORD}`, `${JENKINS_ADMIN_USER}` and `${JENKINS_ADMIN_PASSWORD}`:

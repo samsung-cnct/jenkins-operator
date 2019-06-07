@@ -68,7 +68,6 @@ const (
 	JenkinsMasterPort = 8080
 	JenkinsAgentPort  = 50000
 	JenkinsReplicas   = 1
-	JenkinsPullPolicy = "Always"
 )
 
 // Add creates a new JenkinsInstance Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
@@ -980,19 +979,32 @@ func (bc *ReconcileJenkinsInstance) newDeployment(instanceName types.NamespacedN
 					"-c",
 					commandString,
 				},
-				ImagePullPolicy: JenkinsPullPolicy,
+				ImagePullPolicy: jenkinsInstance.Spec.ImagePullPolicy,
 				VolumeMounts:    deploymentVolumeMounts,
+				Resources:       jenkinsInstance.Spec.Resources,
 			},
 		}
 		deploymentCopy.Spec.Template.Spec.Volumes = deploymentVolumes
 		deploymentCopy.Spec.Template.Spec.ServiceAccountName = jenkinsInstance.Spec.ServiceAccount
+		deploymentCopy.Spec.Template.Spec.Affinity = &jenkinsInstance.Spec.Affinity
+		deploymentCopy.Spec.Template.Spec.DNSPolicy = jenkinsInstance.Spec.DNSPolicy
+		deploymentCopy.Spec.Template.Spec.NodeSelector = jenkinsInstance.Spec.NodeSelector
+		deploymentCopy.Spec.Template.Spec.NodeName = jenkinsInstance.Spec.NodeName
+		deploymentCopy.Spec.Template.Spec.ImagePullSecrets = jenkinsInstance.Spec.ImagePullSecrets
+		deploymentCopy.Spec.Template.Spec.Tolerations = jenkinsInstance.Spec.Tolerations
 
 		changed := reflect.DeepEqual(deploymentCopy.Annotations, deployment.Annotations) &&
 			reflect.DeepEqual(deploymentCopy.Spec.Selector, deployment.Spec.Selector) &&
 			reflect.DeepEqual(deploymentCopy.Spec.Template.Spec.Containers, deployment.Spec.Template.Spec.Containers) &&
 			reflect.DeepEqual(deploymentCopy.Spec.Template.Spec.Volumes, deployment.Spec.Template.Spec.Volumes) &&
 			(deploymentCopy.Spec.Replicas == deployment.Spec.Replicas) &&
-			(deploymentCopy.Spec.Template.Spec.ServiceAccountName == deployment.Spec.Template.Spec.ServiceAccountName)
+			(deploymentCopy.Spec.Template.Spec.ServiceAccountName == deployment.Spec.Template.Spec.ServiceAccountName) &&
+			reflect.DeepEqual(deploymentCopy.Spec.Template.Spec.Affinity, deployment.Spec.Template.Spec.Affinity) &&
+			(deploymentCopy.Spec.Template.Spec.DNSPolicy == deployment.Spec.Template.Spec.DNSPolicy) &&
+			reflect.DeepEqual(deploymentCopy.Spec.Template.Spec.NodeSelector, deployment.Spec.Template.Spec.NodeSelector) &&
+			(deploymentCopy.Spec.Template.Spec.NodeName == deployment.Spec.Template.Spec.NodeName) &&
+			reflect.DeepEqual(deploymentCopy.Spec.Template.Spec.ImagePullSecrets, deployment.Spec.Template.Spec.ImagePullSecrets) &&
+			reflect.DeepEqual(deploymentCopy.Spec.Template.Spec.Tolerations, deployment.Spec.Template.Spec.Tolerations)
 
 		if !changed {
 			return deployment, nil
@@ -1046,12 +1058,19 @@ func (bc *ReconcileJenkinsInstance) newDeployment(instanceName types.NamespacedN
 									"-c",
 									commandString,
 								},
-								ImagePullPolicy: JenkinsPullPolicy,
+								ImagePullPolicy: jenkinsInstance.Spec.ImagePullPolicy,
 								VolumeMounts:    deploymentVolumeMounts,
+								Resources:       jenkinsInstance.Spec.Resources,
 							},
 						},
 
-						Volumes: deploymentVolumes,
+						Volumes:          deploymentVolumes,
+						Affinity:         &jenkinsInstance.Spec.Affinity,
+						DNSPolicy:        jenkinsInstance.Spec.DNSPolicy,
+						NodeSelector:     jenkinsInstance.Spec.NodeSelector,
+						NodeName:         jenkinsInstance.Spec.NodeName,
+						ImagePullSecrets: jenkinsInstance.Spec.ImagePullSecrets,
+						Tolerations:      jenkinsInstance.Spec.Tolerations,
 					},
 				},
 			},
