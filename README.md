@@ -28,7 +28,16 @@ $ helm repo add cnct https://charts.cnct.io
 $ helm repo update
 $ helm install cnct/jenkins-operator --name jenkins-operator
 ```
-or get it from the incubator, which might not be as up-to-date as our own chart repo
+
+or get it from the incubator, __which might not be as up-to-date as our own chart repo__:
+
+```bash
+helm repo add incubator https://kubernetes-charts-incubator.storage.googleapis.com/
+$ helm repo update
+$ helm install incubator/jenkins-operator --name jenkins-operator
+```
+
+or install from source:
 
 ```bash
 $ helm install deployments/helm/jenkins-operator --name jenkins-operator
