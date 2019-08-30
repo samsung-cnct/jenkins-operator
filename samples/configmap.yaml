@@ -65,8 +65,8 @@ data:
             maxRequestsPerHostStr: 64
             retentionTimeout: 5
     security:
-      remotingCLI:
-        enabled: false
+      globalJobDslSecurityConfiguration:
+        useScriptSecurity: false
     unclassified:
       location:
         adminAddress: admin@cnct.team
