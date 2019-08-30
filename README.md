@@ -129,7 +129,7 @@ spec:
                 - ReadWriteOnce
             resources:                              # PVC requests
                 requests:
-                    storage: 1Gi
+                    storage: 5Gi
     affinity:                                       # k8s affinity configuration for jenkins pod
         nodeAffinity:
             requiredDuringSchedulingIgnoredDuringExecution:
@@ -204,8 +204,8 @@ data:
       slaveAgentPort: 50000
       systemMessage: "jenkins-operator managed Jenkins instance\n\n"
     security:
-      remotingCLI:
-        enabled: false
+      globalJobDslSecurityConfiguration:
+        useScriptSecurity: false
     unclassified:
       location:
         adminAddress: admin@domain.com
