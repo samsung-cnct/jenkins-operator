@@ -24,15 +24,14 @@ The jenkins operator manages Jenkins instances deployed to [Kubernetes][k8s-home
 ### Deploy jenkins operator
 
 ```bash
-$ helm install deployments/helm/jenkins-operator --name jenkins-operator
-```
-
-or
-
-```bash
 $ helm repo add cnct https://charts.cnct.io
 $ helm repo update
 $ helm install cnct/jenkins-operator --name jenkins-operator
+```
+or get it from the incubator, which might not be as up-to-date as our own chart repo
+
+```bash
+$ helm install deployments/helm/jenkins-operator --name jenkins-operator
 ```
 
 ### Create a secret with Jenkins admin credentials
