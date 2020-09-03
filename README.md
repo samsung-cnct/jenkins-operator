@@ -1,3 +1,4 @@
+# DEPRECATED: Please consider using https://github.com/jenkinsci/kubernetes-operator
 # Jenkins operator
 [![Build Status](https://jenkins.cnct.io/buildStatus/icon?job=jenkins-operator/master)](https://jenkins.cnct.io/job/jenkins-operator/job/master/)
 
